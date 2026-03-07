@@ -1,7 +1,7 @@
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { LookaheadTask } from '../types';
-import { addDays, formatDateISO, getDaysDiff, parseLookaheadDate } from '../../../../lib/dateUtils';
+import { addDays, formatDateISO, getDaysDiff, parseLookaheadDate, formatDisplayDate } from '../../../../lib/dateUtils';
 
 interface DraggableTaskBarProps {
     task: LookaheadTask;
@@ -53,8 +53,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
     const taskEnd = parseLookaheadDate(task.finishDate);
     const offsetDays = getDaysDiff(projectStartDate, taskStart);
     const durationDays = getDaysDiff(taskStart, taskEnd) + 1;
-    const progressPercent = task.manHours.budget > 0 ? (task.manHours.actual / task.manHours.budget) * 100 : 0;
-    const displayProgressPercent = Math.min(100, progressPercent);
+    const displayProgressPercent = Math.min(100, task.progress);
 
     const hasMasterRange = !!(task.masterStartDate && task.masterFinishDate);
 
@@ -171,7 +170,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 width: `${barWidth}px`,
             }}
             onMouseDown={(e) => isFieldTask && handleMouseDown(e, 'move')}
-            title={`${task.name}: ${task.startDate} to ${task.finishDate}${hasMasterRange ? ` (Master: ${task.masterStartDate} to ${task.masterFinishDate})` : ''}`}
+            title={`${task.name}: ${formatDisplayDate(task.startDate)} to ${formatDisplayDate(task.finishDate)}${hasMasterRange ? ` (Master: ${formatDisplayDate(task.masterStartDate!)} to ${formatDisplayDate(task.masterFinishDate!)})` : ''}`}
         >
             {masterIndicator}
             

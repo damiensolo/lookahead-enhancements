@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType } from '../types';
 import { XIcon, PlusIcon, AlertTriangleIcon } from '../../../common/Icons';
 import ManHoursBar from './ManHoursBar';
+import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 
 interface LookaheadDetailsPanelProps {
   task: LookaheadTask | null;
   onClose: () => void;
   onAddConstraint: (taskId: string | number, constraint: Constraint) => void;
+  onUpdateProgress?: (taskId: string | number, progress: number) => void;
 }
 
 const getStatusDot = (status: ConstraintStatus) => {
@@ -100,7 +104,7 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
 };
 
 
-const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onClose, onAddConstraint }) => {
+const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onClose, onAddConstraint, onUpdateProgress }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -177,11 +181,86 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                     </div>
                     <div className="col-span-2">
                         <div className="text-xs text-gray-500">Dates</div>
-                        <div className="font-semibold text-gray-800 text-sm">{task.startDate} → {task.finishDate}</div>
+                        <div className="font-semibold text-gray-800 text-sm">{formatDisplayDate(task.startDate)} → {formatDisplayDate(task.finishDate)}</div>
                     </div>
                 </div>
                 
-                <div>
+                <div className="mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Task Progress</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-blue-600">{task.progress}%</span>
+                            {task.taskType === 'Field Task' && (
+                                <div className="flex bg-gray-100 rounded-lg p-0.5">
+                                    <button 
+                                        onClick={() => onUpdateProgress?.(task.id, Math.max(0, task.progress - 5))}
+                                        className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-gray-500"
+                                    >
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                        onClick={() => onUpdateProgress?.(task.id, Math.min(100, task.progress + 5))}
+                                        className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-gray-500"
+                                    >
+                                        <ChevronUp className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {task.taskType === 'Field Task' && onUpdateProgress ? (
+                        <div className="space-y-4">
+                            <div className="relative h-6 flex items-center">
+                                <input 
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={task.progress}
+                                    onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
+                                    className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600 z-10"
+                                />
+                                <div className="absolute inset-0 flex justify-between px-1 pointer-events-none">
+                                    {[0, 25, 50, 75, 100].map(p => (
+                                        <div key={p} className="flex flex-col items-center justify-center">
+                                            <div className="h-1.5 w-0.5 bg-gray-300 mb-1" />
+                                            <span className="text-[8px] font-bold text-gray-400">{p}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-5 gap-2">
+                                {[0, 25, 50, 75, 100].map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => onUpdateProgress(task.id, p)}
+                                        className={`
+                                            py-1.5 rounded-lg text-[10px] font-bold transition-all
+                                            ${task.progress === p 
+                                                ? 'bg-blue-600 text-white shadow-md' 
+                                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                                            }
+                                        `}
+                                    >
+                                        {p}%
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${task.progress}%` }}
+                                className="h-full bg-blue-500"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="mb-6">
                     <div className="flex justify-between items-baseline mb-1">
                       <span className="text-xs text-gray-500">Man-Hours Progress</span>
                     </div>

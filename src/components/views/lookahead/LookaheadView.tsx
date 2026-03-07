@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus } from './types';
 import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS } from './constants';
-import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO } from '../../../lib/dateUtils';
+import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
 import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ScissorsIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon } from '../../common/Icons';
 import ConstraintBadge from './components/ConstraintBadge';
 import ManHoursBar from './components/ManHoursBar';
@@ -13,6 +13,7 @@ import { TaskSelectionModal } from './components/TaskSelectionModal';
 import { CreateLookaheadModal } from './components/CreateLookaheadModal';
 import { FieldBreakdownModal } from './components/FieldBreakdownModal';
 import { DeltasModal } from './components/DeltasModal';
+import ProgressCell from './components/ProgressCell';
 import { compareLookaheadTasks } from './utils/diffUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../common/ui/Tooltip';
 import { useProject } from '../../../context/ProjectContext';
@@ -118,6 +119,8 @@ const LookaheadView: React.FC = () => {
 
     const [plannerTasks, setPlannerTasks] = useState<LookaheadTask[]>(activeSchedule.tasks);
     const [selectedRowIds, setSelectedRowIds] = useState<Set<string | number>>(new Set());
+    const [selectedTask, setSelectedTask] = useState<LookaheadTask | null>(null);
+    const [selectedDay, setSelectedDay] = useState<{ task: LookaheadTask; date: Date; forecast?: WeatherForecast } | null>(null);
     const [isFieldBreakdownModalOpen, setIsFieldBreakdownModalOpen] = useState(false);
     const [taskToBreakdown, setTaskToBreakdown] = useState<LookaheadTask | null>(null);
     
@@ -162,8 +165,6 @@ const LookaheadView: React.FC = () => {
         }
     }, [plannerTasks, activeScheduleId, updateScheduleTasks]);
 
-    const [selectedTask, setSelectedTask] = useState<LookaheadTask | null>(null);
-    const [selectedDay, setSelectedDay] = useState<{ task: LookaheadTask; date: Date; forecast?: WeatherForecast } | null>(null);
     const [isScrolled, setIsScrolled] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     
@@ -253,6 +254,31 @@ const LookaheadView: React.FC = () => {
             });
         };
         setPlannerTasks(prev => toggleRecursively(prev));
+    };
+
+    const handleUpdateProgress = (taskId: string | number, progress: number) => {
+        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => {
+            return tasks.map(task => {
+                let updatedTask = { ...task };
+                if (task.id === taskId) {
+                    updatedTask.progress = progress;
+                }
+                
+                if (task.children && task.children.length > 0) {
+                    updatedTask.children = updateRecursively(task.children);
+                    // Recalculate parent progress based on children
+                    const totalProgress = updatedTask.children.reduce((acc, child) => acc + child.progress, 0);
+                    updatedTask.progress = Math.round(totalProgress / updatedTask.children.length);
+                }
+                
+                if (selectedTask && selectedTask.id === task.id) {
+                    setSelectedTask(updatedTask);
+                }
+                
+                return updatedTask;
+            });
+        };
+        setPlannerTasks(prev => updateRecursively(prev));
     };
 
     const handleAddConstraint = (taskId: string | number, newConstraint: Constraint) => {
@@ -396,7 +422,7 @@ const LookaheadView: React.FC = () => {
                         onToggle={() => toggleRowSelection(task.id)}
                     />
                 );
-            case 'name':
+            case 'name': {
                 const hasBlockingConstraints = task.constraints.some(c => c.severity === 'Blocking');
                 const taskDeltas = activeScheduleId ? deltas[activeScheduleId] || [] : [];
                 const taskDelta = taskDeltas.find(d => String(d.taskId) === String(task.id));
@@ -451,6 +477,7 @@ const LookaheadView: React.FC = () => {
                         </button>
                     </div>
                 );
+            }
             case 'status':
                 return (
                     <ConstraintBadge 
@@ -489,21 +516,22 @@ const LookaheadView: React.FC = () => {
                 return <span className="truncate text-gray-700 min-w-0" title={task.contractor}>{task.contractor}</span>;
             case 'location':
                 return <span className="truncate text-gray-500 italic min-w-0">{task.location || '-'}</span>;
-            case 'progress':
+            case 'progress': {
+                const isFieldTask = task.taskType === 'Field Task';
                 return (
-                    <div className="w-full flex items-center gap-2">
-                        <div className="flex-grow bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-blue-500 h-full" style={{ width: `${task.progress}%` }} />
-                        </div>
-                        <span className="text-[10px] font-medium text-gray-600 min-w-[24px]">{task.progress}%</span>
-                    </div>
+                    <ProgressCell 
+                        progress={task.progress}
+                        isEditable={isFieldTask}
+                        onChange={(val) => handleUpdateProgress(task.id, val)}
+                    />
                 );
+            }
             case 'crewAssigned':
                 return <span className="w-full text-center font-medium text-gray-700">{task.crewAssigned}</span>;
             case 'planStart':
-                return <span className="text-gray-600 text-xs">{task.startDate}</span>;
+                return <span className="text-gray-600 text-xs">{formatDisplayDate(task.startDate)}</span>;
             case 'planEnd':
-                return <span className="text-gray-600 text-xs">{task.finishDate}</span>;
+                return <span className="text-gray-600 text-xs">{formatDisplayDate(task.finishDate)}</span>;
             default:
                 return null;
         }
@@ -528,10 +556,10 @@ const LookaheadView: React.FC = () => {
                         {visiblePanelColumns.map((col, index) => (
                              <div 
                                 key={col.id} 
-                                className={`flex-shrink-0 flex items-center px-2 text-sm overflow-hidden relative ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''}`}
+                                className={`flex-shrink-0 flex items-center px-2 text-sm relative ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''} ${col.lookaheadType === 'progress' ? '' : 'overflow-hidden'}`}
                                 style={{ width: `${col.widthPx}px` }}
                             >
-                                <div className="w-full min-w-0 overflow-hidden flex items-center">
+                                <div className={`w-full min-w-0 flex items-center ${col.lookaheadType === 'progress' ? '' : 'overflow-hidden'}`}>
                                     {renderCell(col.lookaheadType, task, level)}
                                 </div>
                              </div>
@@ -698,7 +726,12 @@ const LookaheadView: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    <LookaheadDetailsPanel task={selectedTask} onClose={() => setSelectedTask(null)} onAddConstraint={handleAddConstraint} />
+                    <LookaheadDetailsPanel 
+                        task={selectedTask} 
+                        onClose={() => setSelectedTask(null)} 
+                        onAddConstraint={handleAddConstraint} 
+                        onUpdateProgress={handleUpdateProgress}
+                    />
                     <DailyMetricsPanel data={selectedDay} onClose={() => setSelectedDay(null)} />
                 </div>
             </div>

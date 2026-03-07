@@ -10,13 +10,15 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
-    "framer-motion": "^11.0.0",
-    "date-fns": "^3.3.1",
-    "d3": "^7.9.0",
     "@carbon/charts": "^1.27.0",
-    "@carbon/charts-react": "^1.17.0"
+    "@carbon/charts-react": "^1.17.0",
+    "d3": "^7.9.0",
+    "date-fns": "^3.3.1",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^0.577.0",
+    "motion": "^12.35.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

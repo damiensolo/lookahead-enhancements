@@ -2,6 +2,7 @@
 import React from 'react';
 import { LookaheadTask, TaskDelta } from '../types';
 import { XIcon, PlusIcon, TrashIcon, HistoryIcon } from '../../../common/Icons';
+import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 interface DeltasModalProps {
   isOpen: boolean;
@@ -103,15 +104,15 @@ export const DeltasModal: React.FC<DeltasModalProps> = ({
                           {d.changes?.startDate && (
                             <div className="flex items-center gap-2 text-xs">
                               <span className="text-zinc-400">Start:</span>
-                              <span className="line-through text-zinc-400">{d.changes.startDate.from}</span>
-                              <span className="text-blue-600 font-bold">→ {d.changes.startDate.to}</span>
+                              <span className="line-through text-zinc-400">{formatDisplayDate(d.changes.startDate.from)}</span>
+                              <span className="text-blue-600 font-bold">→ {formatDisplayDate(d.changes.startDate.to)}</span>
                             </div>
                           )}
                           {d.changes?.finishDate && (
                             <div className="flex items-center gap-2 text-xs">
                               <span className="text-zinc-400">End:</span>
-                              <span className="line-through text-zinc-400">{d.changes.finishDate.from}</span>
-                              <span className="text-blue-600 font-bold">→ {d.changes.finishDate.to}</span>
+                              <span className="line-through text-zinc-400">{formatDisplayDate(d.changes.finishDate.from)}</span>
+                              <span className="text-blue-600 font-bold">→ {formatDisplayDate(d.changes.finishDate.to)}</span>
                             </div>
                           )}
                           {d.changes?.quantity && (

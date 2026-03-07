@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { XIcon, CalendarIcon, ListIcon, HistoryIcon } from '../../../common/Icons';
+import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 interface CreateLookaheadModalProps {
   isOpen: boolean;
@@ -88,7 +89,7 @@ export const CreateLookaheadModal: React.FC<CreateLookaheadModalProps> = ({
               <div className="grid grid-cols-2 gap-4 pb-4 border-b border-black/5">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Prev. Start Date</label>
-                  <div className="text-sm font-medium text-zinc-600">{previousStartDate}</div>
+                  <div className="text-sm font-medium text-zinc-600">{formatDisplayDate(previousStartDate)}</div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Prev. Duration</label>

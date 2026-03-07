@@ -12,9 +12,9 @@ export const getDefaultTableColumns = (): Column[] => [
 export const getDefaultLookaheadColumns = (): Column[] => [
   { id: 'sNo', label: '#', width: '40px', visible: true, minWidth: 20 },
   { id: 'name', label: 'Task Name', width: '300px', visible: true, minWidth: 100 },
-  { id: 'status', label: 'Status', width: '100px', visible: true, minWidth: 60 },
+  { id: 'status', label: 'Status', width: '140px', visible: true, minWidth: 120 },
   { id: 'taskType', label: 'Task Type', width: '120px', visible: true, minWidth: 40 },
-  { id: 'progress', label: 'Progress', width: '80px', visible: true, minWidth: 40 },
+  { id: 'progress', label: 'Progress', width: '100px', visible: true, minWidth: 80 },
   { id: 'planStart', label: 'Start', width: '100px', visible: true, minWidth: 60 },
   { id: 'planEnd', label: 'End', width: '100px', visible: true, minWidth: 60 },
   { id: 'contractor', label: 'Contractor', width: '180px', visible: true, minWidth: 80 },
