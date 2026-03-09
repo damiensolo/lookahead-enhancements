@@ -210,8 +210,8 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                     </div>
                     
                     {task.taskType === 'Field Task' && onUpdateProgress ? (
-                        <div className="space-y-4">
-                            <div className="relative h-6 flex items-center">
+                        <div className="space-y-6 px-2">
+                            <div className="relative h-8 flex items-center">
                                 <input 
                                     type="range"
                                     min="0"
@@ -221,10 +221,10 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                                     onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
                                     className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600 z-10"
                                 />
-                                <div className="absolute inset-0 flex justify-between px-1 pointer-events-none">
+                                <div className="absolute inset-0 flex justify-between pointer-events-none translate-y-4">
                                     {[0, 25, 50, 75, 100].map(p => (
-                                        <div key={p} className="flex flex-col items-center justify-center">
-                                            <div className="h-1.5 w-0.5 bg-gray-300 mb-1" />
+                                        <div key={p} className="flex flex-col items-center">
+                                            <div className="h-1.5 w-0.5 bg-gray-300 mb-0.5" />
                                             <span className="text-[8px] font-bold text-gray-400">{p}%</span>
                                         </div>
                                     ))}

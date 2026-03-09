@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { LookaheadTask, ConstraintStatus, ConstraintType } from '../types';
-import { XIcon, PlusIcon, TrashIcon, ScissorsIcon } from '../../../common/Icons';
+import { XIcon, PlusIcon, TrashIcon, ListTreeIcon } from '../../../common/Icons';
 
 interface FieldBreakdownModalProps {
   isOpen: boolean;
@@ -81,7 +81,7 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-black/5 bg-zinc-50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-              <ScissorsIcon className="w-5 h-5" />
+              <ListTreeIcon className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-zinc-900">Field Breakdown (FB)</h2>

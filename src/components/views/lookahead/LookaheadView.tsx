@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus } from './types';
 import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS } from './constants';
 import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
-import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ScissorsIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon } from '../../common/Icons';
+import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon } from '../../common/Icons';
 import ConstraintBadge from './components/ConstraintBadge';
 import ManHoursBar from './components/ManHoursBar';
 import DraggableTaskBar from './components/DraggableTaskBar';
@@ -439,6 +439,8 @@ const LookaheadView: React.FC = () => {
                             ) : <DocumentIcon className="w-4 h-4 text-gray-400"/>}
                         </div>
                         <span className={`truncate font-medium text-sm ${isFieldTask ? 'text-blue-700' : 'text-gray-800'}`} title={task.name}>{task.name}</span>
+                        
+                        {/* Inline Add Button */}
                         {isFieldTask && (
                             <span className="ml-1.5 px-1 rounded bg-blue-100 text-blue-600 text-[8px] font-bold uppercase tracking-wider" title="Field Breakdown Task">Field</span>
                         )}
@@ -454,27 +456,36 @@ const LookaheadView: React.FC = () => {
                                 {taskDelta.type}
                             </span>
                         )}
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setTaskToBreakdown(task);
-                                setIsFieldBreakdownModalOpen(true);
-                            }}
-                            className="ml-auto p-1 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
-                            title="Field Breakdown"
-                        >
-                            <ScissorsIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteTask(task.id);
-                            }}
-                            className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
-                            title="Delete Task"
-                        >
-                            <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="ml-auto flex items-center gap-1">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setIsAddTaskModalOpen(true); }}
+                                className="p-1 rounded-full hover:bg-blue-100 text-blue-500 opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                title="Add task"
+                            >
+                                <PlusIcon className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTaskToBreakdown(task);
+                                    setIsFieldBreakdownModalOpen(true);
+                                }}
+                                className="p-1.5 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                title="Field Breakdown"
+                            >
+                                <ListTreeIcon className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTask(task.id);
+                                }}
+                                className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                title="Delete Task"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
                 );
             }

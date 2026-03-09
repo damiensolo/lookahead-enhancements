@@ -79,6 +79,7 @@ const ProgressCell: React.FC<ProgressCellProps> = ({ progress, isEditable, onCha
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-100 p-4 w-48 pointer-events-auto"
                         style={{
                             top: `${popoverPos.top + 8}px`,

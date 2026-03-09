@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XIcon, CalendarIcon, ListIcon, HistoryIcon } from '../../../common/Icons';
+import { XIcon, CalendarIcon, ListTreeIcon, HistoryIcon } from '../../../common/Icons';
 import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 interface CreateLookaheadModalProps {
@@ -72,7 +72,7 @@ export const CreateLookaheadModal: React.FC<CreateLookaheadModalProps> = ({
               }`}
             >
               <div className={`p-2 rounded-lg ${strategy === 'master' ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-500'}`}>
-                <ListIcon className="w-6 h-6" />
+                <ListTreeIcon className="w-6 h-6" />
               </div>
               <div>
                 <div className="font-bold text-zinc-900">Create from Master Schedule</div>

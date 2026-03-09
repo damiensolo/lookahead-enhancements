@@ -385,16 +385,17 @@ export const HistoryIcon: React.FC<IconProps> = ({ title, ...props }) => (
   </svg>
 );
 
-export const ListIcon: React.FC<IconProps> = ({ title, ...props }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    {title && <title>{title}</title>}
-    <line x1="8" y1="6" x2="21" y2="6"></line>
-    <line x1="8" y1="12" x2="21" y2="12"></line>
-    <line x1="8" y1="18" x2="21" y2="18"></line>
-    <line x1="3" y1="6" x2="3.01" y2="6"></line>
-    <line x1="3" y1="12" x2="3.01" y2="12"></line>
-    <line x1="3" y1="18" x2="3.01" y2="18"></line>
-  </svg>
+export const ListTreeIcon: React.FC<IconProps> = ({ title, ...props }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        {title && <title>{title}</title>}
+        <path d="M21 12h-8" />
+        <path d="M21 6H13" />
+        <path d="M21 18h-8" />
+        <path d="M9 6v12" />
+        <path d="M9 12H7" />
+        <path d="M9 6H7" />
+        <path d="M9 18H7" />
+    </svg>
 );
 
 export const CalendarIcon: React.FC<IconProps> = ({ title, ...props }) => (
