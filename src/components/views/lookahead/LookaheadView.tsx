@@ -60,17 +60,24 @@ const COLUMN_MAPPING: Record<string, LookaheadColumnType> = {
 const RowNumberCheckbox = ({ 
     index, 
     isSelected, 
-    onToggle 
+    onToggle,
+    isCritical
 }: { 
-    index: number; 
+    index: string | number; 
     isSelected: boolean; 
     onToggle: () => void; 
+    isCritical?: boolean;
 }) => {
     return (
-        <div className="flex items-center justify-center w-full h-full relative">
-            <span className={`text-xs text-gray-400 transition-opacity duration-100 ${isSelected ? 'opacity-0' : 'group-hover:opacity-0'}`}>
+        <div className="flex items-center justify-center w-full h-full relative group/sno">
+            <span className={`text-xs transition-opacity duration-100 ${isSelected ? 'opacity-0' : 'group-hover:opacity-0'} ${isCritical ? 'text-red-700 font-medium' : 'text-gray-400'}`}>
                 {index}
             </span>
+            {isCritical && !isSelected && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/sno:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Critical Task
+                </div>
+            )}
             <input 
                 type="checkbox" 
                 checked={isSelected}
@@ -417,9 +424,10 @@ const LookaheadView: React.FC = () => {
             case 'sNo':
                 return (
                     <RowNumberCheckbox 
-                        index={task.sNo}
+                        index={task.outline || task.sNo}
                         isSelected={selectedRowIds.has(task.id)}
                         onToggle={() => toggleRowSelection(task.id)}
+                        isCritical={task.isCriticalPath}
                     />
                 );
             case 'name': {
@@ -567,10 +575,13 @@ const LookaheadView: React.FC = () => {
                         {visiblePanelColumns.map((col, index) => (
                              <div 
                                 key={col.id} 
-                                className={`flex-shrink-0 flex items-center px-2 text-sm relative ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''} ${col.lookaheadType === 'progress' ? '' : 'overflow-hidden'}`}
+                                className={`flex-shrink-0 flex items-center px-2 text-sm relative ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo') ? '' : 'overflow-hidden'} ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : ''}`}
                                 style={{ width: `${col.widthPx}px` }}
                             >
-                                <div className={`w-full min-w-0 flex items-center ${col.lookaheadType === 'progress' ? '' : 'overflow-hidden'}`}>
+                                {(col.lookaheadType === 'sNo' && task.isCriticalPath) && (
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600" />
+                                )}
+                                <div className={`w-full h-full min-w-0 flex items-center ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo') ? '' : 'overflow-hidden'}`}>
                                     {renderCell(col.lookaheadType, task, level)}
                                 </div>
                              </div>
