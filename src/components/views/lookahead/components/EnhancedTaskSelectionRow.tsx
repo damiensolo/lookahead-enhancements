@@ -26,7 +26,7 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
   return (
     <TooltipProvider>
       <div
-        className={`flex items-center justify-between p-3 border-b border-black/5 hover:bg-black/5 transition-colors cursor-pointer ${
+        className={`flex items-center justify-between px-6 py-3 border-b border-black/5 hover:bg-black/5 transition-colors cursor-pointer ${
           isSelected ? 'bg-emerald-50' : ''
         }`}
         onClick={() => onSelect(task)}
@@ -54,11 +54,24 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
 
           {/* Slack Indicator */}
           {task.slack !== undefined && (
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-              task.slack === 0 ? 'bg-zinc-100 text-zinc-600' : 'bg-blue-50 text-blue-600'
-            }`}>
-              Slack: {task.slack}d
-            </span>
+            <Tooltip>
+              <TooltipTrigger>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                  task.slack === 0 
+                    ? 'bg-zinc-100 text-zinc-600 border-zinc-200' 
+                    : 'bg-blue-50 text-blue-600 border-blue-100'
+                }`}>
+                  Slack: {task.slack}d
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <div className="text-[10px] max-w-[150px]">
+                  {task.slack === 0 
+                    ? "Critical: No flexibility. Any delay impacts project finish." 
+                    : `${task.slack} days of buffer before project finish is impacted.`}
+                </div>
+              </TooltipContent>
+            </Tooltip>
           )}
 
           {/* Risk Warnings */}
@@ -70,7 +83,9 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
                     <ClipboardIcon className="w-4 h-4 text-amber-500" />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="top">Unanswered RFI</TooltipContent>
+                <TooltipContent side="top">
+                  <div className="text-[10px]">Unanswered RFI: Risk to task start</div>
+                </TooltipContent>
               </Tooltip>
             )}
             {hasUnansweredSubmittals && (
@@ -80,11 +95,20 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
                     <DocumentIcon className="w-4 h-4 text-amber-500" />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="top">Pending Submittal</TooltipContent>
+                <TooltipContent side="top">
+                  <div className="text-[10px]">Pending Submittal: Risk to material/approval</div>
+                </TooltipContent>
               </Tooltip>
             )}
             {(hasUnansweredRFIs || hasUnansweredSubmittals) && (
-              <AlertTriangleIcon className="w-4 h-4 text-red-500 animate-pulse" />
+              <Tooltip>
+                <TooltipTrigger>
+                  <AlertTriangleIcon className="w-4 h-4 text-red-500 animate-pulse" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <div className="text-[10px] font-bold text-red-500">High Risk: Open constraints</div>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>

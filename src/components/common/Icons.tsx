@@ -268,6 +268,23 @@ export const EyeIcon: React.FC<IconProps> = ({ title, ...props }) => (
   </svg>
 );
 
+export const EyeOffIcon: React.FC<IconProps> = ({ title, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    {title && <title>{title}</title>}
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 11 7 11 7a18.58 18.58 0 0 1-2.16 3.19"></path>
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 1 12s4 8 11 8c2.12 0 3.89-.79 5.39-2.09"></path>
+    <line x1="1" y1="1" x2="23" y2="23"></line>
+  </svg>
+);
+
+export const CheckIcon: React.FC<IconProps> = ({ title, ...props }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    {title && <title>{title}</title>}
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 export const XIcon: React.FC<IconProps> = ({ title, ...props }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
     {title && <title>{title}</title>}

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus } from './types';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS } from './types';
 import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS } from './constants';
 import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
 import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon } from '../../common/Icons';
@@ -14,6 +14,7 @@ import { CreateLookaheadModal } from './components/CreateLookaheadModal';
 import { FieldBreakdownModal } from './components/FieldBreakdownModal';
 import { DeltasModal } from './components/DeltasModal';
 import ProgressCell from './components/ProgressCell';
+import ContractorSelect from './components/ContractorSelect';
 import { compareLookaheadTasks } from './utils/diffUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../common/ui/Tooltip';
 import { useProject } from '../../../context/ProjectContext';
@@ -29,14 +30,14 @@ const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => 
     }
 };
 
-const DAY_WIDTH = 40;
+const DAY_WIDTH = 32;
 
 const getRowHeight = (density: DisplayDensity) => {
   switch (density) {
-    case 'compact': return 32;
-    case 'standard': return 38;
-    case 'comfortable': return 48;
-    default: return 38;
+    case 'compact': return 30;
+    case 'standard': return 34;
+    case 'comfortable': return 42;
+    default: return 34;
   }
 };
 
@@ -54,7 +55,6 @@ const COLUMN_MAPPING: Record<string, LookaheadColumnType> = {
     contractor: 'contractor',
     crewAssigned: 'crewAssigned',
     location: 'location',
-    shared: 'shared',
 };
 
 const RowNumberCheckbox = ({ 
@@ -97,7 +97,7 @@ const LookaheadView: React.FC = () => {
         isCreateLookaheadModalOpen, setIsCreateLookaheadModalOpen,
         isAddTaskModalOpen, setIsAddTaskModalOpen
     } = useProject();
-    const { columns, displayDensity } = activeView;
+    const { columns, displayDensity, fontSize } = activeView;
 
     const activeSchedule = useMemo(() => 
         schedules.find(s => s.id === activeScheduleId) || schedules[0]
@@ -288,6 +288,25 @@ const LookaheadView: React.FC = () => {
         setPlannerTasks(prev => updateRecursively(prev));
     };
 
+    const handleUpdateContractor = (taskId: string | number, contractor: string) => {
+        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => {
+            return tasks.map(task => {
+                if (task.id === taskId) {
+                    const updatedTask = { ...task, contractor };
+                    if (selectedTask && selectedTask.id === taskId) {
+                        setSelectedTask(updatedTask);
+                    }
+                    return updatedTask;
+                }
+                if (task.children) {
+                    return { ...task, children: updateRecursively(task.children) };
+                }
+                return task;
+            });
+        };
+        setPlannerTasks(prev => updateRecursively(prev));
+    };
+
     const handleAddConstraint = (taskId: string | number, newConstraint: Constraint) => {
         const addConstraintRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => {
             return tasks.map(task => {
@@ -324,6 +343,13 @@ const LookaheadView: React.FC = () => {
         const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => {
             return tasks.map(task => {
                 if (task.id === taskId) {
+                    if (task.taskType === 'Field Task') {
+                        return {
+                            ...task,
+                            fieldStartDate: newStart,
+                            fieldFinishDate: newFinish,
+                        };
+                    }
                     return {
                         ...task,
                         startDate: newStart,
@@ -360,11 +386,11 @@ const LookaheadView: React.FC = () => {
         setIsCreateLookaheadModalOpen(false);
     };
 
-    const handleSaveBreakdown = (taskId: string | number, subTasks: Partial<LookaheadTask>[]) => {
+    const handleSaveBreakdown = (taskId: string | number, subTasks: LookaheadTask[]) => {
         const updateTasks = (tasks: LookaheadTask[]): LookaheadTask[] => {
             return tasks.map(t => {
                 if (t.id === taskId) {
-                    return { ...t, children: subTasks as LookaheadTask[], isExpanded: true };
+                    return { ...t, children: subTasks, isExpanded: true };
                 }
                 if (t.children) {
                     return { ...t, children: updateTasks(t.children) };
@@ -373,21 +399,6 @@ const LookaheadView: React.FC = () => {
             });
         };
         setPlannerTasks(prev => updateTasks(prev));
-    };
-
-    const handleToggleShared = (taskId: string | number) => {
-        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => {
-            return tasks.map(task => {
-                if (task.id === taskId) {
-                    return { ...task, isShared: !task.isShared };
-                }
-                if (task.children) {
-                    return { ...task, children: updateRecursively(task.children) };
-                }
-                return task;
-            });
-        };
-        setPlannerTasks(prev => updateRecursively(prev));
     };
 
     const handleDeleteTask = (taskId: string | number) => {
@@ -446,7 +457,7 @@ const LookaheadView: React.FC = () => {
                                 </button>
                             ) : <DocumentIcon className="w-4 h-4 text-gray-400"/>}
                         </div>
-                        <span className={`truncate font-medium text-sm ${isFieldTask ? 'text-blue-700' : 'text-gray-800'}`} title={task.name}>{task.name}</span>
+                        <span className={`truncate font-medium ${isFieldTask ? 'text-blue-700' : 'text-gray-800'}`} title={task.name}>{task.name}</span>
                         
                         {/* Inline Add Button */}
                         {isFieldTask && (
@@ -504,25 +515,6 @@ const LookaheadView: React.FC = () => {
                         onClick={() => handleConstraintBadgeClick(task)} 
                     />
                 );
-            case 'shared':
-                return (
-                    <div className="flex items-center justify-center w-full">
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleShared(task.id);
-                            }}
-                            className={`p-1 rounded-md transition-colors ${
-                                task.isShared 
-                                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
-                                    : 'text-gray-400 hover:bg-gray-100'
-                            }`}
-                            title={task.isShared ? "Shared with team" : "Private (Draft)"}
-                        >
-                            {task.isShared ? <PublicLinkIcon className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
-                        </button>
-                    </div>
-                );
             case 'taskType':
                 return (
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
@@ -531,8 +523,19 @@ const LookaheadView: React.FC = () => {
                         {task.taskType}
                     </span>
                 );
-            case 'contractor':
+            case 'contractor': {
+                const isFieldTask = task.taskType === 'Field Task';
+                if (isFieldTask) {
+                    return (
+                        <ContractorSelect
+                            value={task.contractor}
+                            onChange={(val) => handleUpdateContractor(task.id, val)}
+                            isMinimal
+                        />
+                    );
+                }
                 return <span className="truncate text-gray-700 min-w-0" title={task.contractor}>{task.contractor}</span>;
+            }
             case 'location':
                 return <span className="truncate text-gray-500 italic min-w-0">{task.location || '-'}</span>;
             case 'progress': {
@@ -547,10 +550,32 @@ const LookaheadView: React.FC = () => {
             }
             case 'crewAssigned':
                 return <span className="w-full text-center font-medium text-gray-700">{task.crewAssigned}</span>;
-            case 'planStart':
-                return <span className="text-gray-600 text-xs">{formatDisplayDate(task.startDate)}</span>;
-            case 'planEnd':
-                return <span className="text-gray-600 text-xs">{formatDisplayDate(task.finishDate)}</span>;
+            case 'planStart': {
+                const isDelayed = task.fieldStartDate && task.fieldStartDate > task.startDate;
+                return (
+                    <div className="flex flex-col leading-tight">
+                        <span className={`${isDelayed ? 'text-red-500 font-medium' : 'text-gray-600'}`}>
+                            {formatDisplayDate(task.fieldStartDate || task.startDate)}
+                        </span>
+                        {task.fieldStartDate && task.fieldStartDate !== task.startDate && (
+                            <span className="text-[9px] text-gray-400 line-through">{formatDisplayDate(task.startDate)}</span>
+                        )}
+                    </div>
+                );
+            }
+            case 'planEnd': {
+                const isDelayed = task.fieldFinishDate && task.fieldFinishDate > task.finishDate;
+                return (
+                    <div className="flex flex-col leading-tight">
+                        <span className={`${isDelayed ? 'text-red-500 font-medium' : 'text-gray-600'}`}>
+                            {formatDisplayDate(task.fieldFinishDate || task.finishDate)}
+                        </span>
+                        {task.fieldFinishDate && task.fieldFinishDate !== task.finishDate && (
+                            <span className="text-[9px] text-gray-400 line-through">{formatDisplayDate(task.finishDate)}</span>
+                        )}
+                    </div>
+                );
+            }
             default:
                 return null;
         }
@@ -563,12 +588,12 @@ const LookaheadView: React.FC = () => {
             const row = (
                 <div 
                     key={task.id} 
-                    className={`group flex border-b border-gray-200 first:border-t transition-colors ${isSelected ? 'bg-blue-50/50' : isFieldTask ? 'bg-blue-50/20' : ''}`} 
+                    className={`group flex border-b border-gray-200 first:border-t transition-colors ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : ''}`} 
                     style={{ height: `${rowHeight}px`}}
                 >
                     {/* Left Panel */}
                     <div 
-                        className={`sticky left-0 z-30 flex border-r border-gray-200 transition-shadow cursor-pointer ${isScrolled ? 'shadow-[2px_0_5px_rgba(0,0,0,0.1)]' : ''} ${isSelected ? 'bg-blue-50' : isFieldTask ? 'bg-blue-50/40' : 'bg-white'}`} 
+                        className={`sticky left-0 z-30 flex border-r border-gray-200 transition-shadow cursor-pointer ${isScrolled ? 'shadow-[2px_0_5px_rgba(0,0,0,0.1)]' : ''} ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`} 
                         style={{ width: `${totalLeftPanelWidth}px` }}
                         onClick={() => setSelectedTask(task)}
                     >
@@ -637,7 +662,10 @@ const LookaheadView: React.FC = () => {
                 <ViewControls />
             </div>
             
-            <div className="flex-grow flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative">
+            <div 
+                className="flex-grow flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative" 
+                style={{ '--table-font-size': `${fontSize}px` } as React.CSSProperties}
+            >
                 {/* Main Planner */}
                 <div className="flex-grow overflow-hidden relative flex">
                     <div ref={scrollContainerRef} className="flex-grow overflow-auto min-w-0">
@@ -753,6 +781,7 @@ const LookaheadView: React.FC = () => {
                         onClose={() => setSelectedTask(null)} 
                         onAddConstraint={handleAddConstraint} 
                         onUpdateProgress={handleUpdateProgress}
+                        onUpdateContractor={handleUpdateContractor}
                     />
                     <DailyMetricsPanel data={selectedDay} onClose={() => setSelectedDay(null)} />
                 </div>

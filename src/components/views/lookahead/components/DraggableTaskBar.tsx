@@ -49,13 +49,17 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
         };
     }, [isCritical, isFieldTask]);
 
-    const taskStart = parseLookaheadDate(task.startDate);
-    const taskEnd = parseLookaheadDate(task.finishDate);
+    const taskStart = parseLookaheadDate(task.fieldStartDate || task.startDate);
+    const taskEnd = parseLookaheadDate(task.fieldFinishDate || task.finishDate);
+    const planStart = parseLookaheadDate(task.startDate);
+    const planEnd = parseLookaheadDate(task.finishDate);
+
     const offsetDays = getDaysDiff(projectStartDate, taskStart);
     const durationDays = getDaysDiff(taskStart, taskEnd) + 1;
     const displayProgressPercent = Math.min(100, task.progress);
 
     const hasMasterRange = !!(task.masterStartDate && task.masterFinishDate);
+    const hasFieldDates = !!(task.fieldStartDate && task.fieldFinishDate);
 
     const handleMouseDown = (e: React.MouseEvent, type: 'move' | 'resize-left' | 'resize-right') => {
         if (!isFieldTask) return; // Only field tasks can be edited
@@ -77,8 +81,8 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
         const deltaX = e.clientX - dragState.startX;
         const dayDelta = Math.round(deltaX / dayWidth);
 
-        const originalStart = parseLookaheadDate(dragState.originalTask.startDate);
-        const originalFinish = parseLookaheadDate(dragState.originalTask.finishDate);
+        const originalStart = parseLookaheadDate(dragState.originalTask.fieldStartDate || dragState.originalTask.startDate);
+        const originalFinish = parseLookaheadDate(dragState.originalTask.fieldFinishDate || dragState.originalTask.finishDate);
 
         let newStart = new Date(originalStart);
         let newFinish = new Date(originalFinish);
@@ -98,24 +102,22 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
             }
         }
 
-        // Enforce Master Range Constraint
-        if (task.masterStartDate && task.masterFinishDate) {
-            const masterStart = parseLookaheadDate(task.masterStartDate);
-            const masterFinish = parseLookaheadDate(task.masterFinishDate);
+        // Enforce Parent/Planned Range Constraint (Field dates must be within planned range)
+        const masterStart = parseLookaheadDate(task.startDate);
+        const masterFinish = parseLookaheadDate(task.finishDate);
 
-            if (newStart < masterStart) newStart = new Date(masterStart);
-            if (newFinish > masterFinish) newFinish = new Date(masterFinish);
-            
-            // Re-check validity after clamping
-            if (newStart > newFinish) {
-                if (dragState.type === 'resize-left') newStart = new Date(newFinish);
-                if (dragState.type === 'resize-right') newFinish = new Date(newStart);
-            }
+        if (newStart < masterStart) newStart = new Date(masterStart);
+        if (newFinish > masterFinish) newFinish = new Date(masterFinish);
+        
+        // Re-check validity after clamping
+        if (newStart > newFinish) {
+            if (dragState.type === 'resize-left') newStart = new Date(newFinish);
+            if (dragState.type === 'resize-right') newFinish = new Date(newStart);
         }
         
         onUpdateTask(task.id, formatDateISO(newStart), formatDateISO(newFinish));
 
-    }, [dragState, dayWidth, onUpdateTask, task.id, task.masterStartDate, task.masterFinishDate]);
+    }, [dragState, dayWidth, onUpdateTask, task.id, task.startDate, task.finishDate]);
 
     const handleMouseUp = useCallback(() => {
         document.body.style.cursor = 'default';
@@ -139,6 +141,22 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
 
     const barWidth = durationDays * dayWidth;
 
+    // Planned Range Indicator (Baseline)
+    const plannedIndicator = useMemo(() => {
+        const pOffset = getDaysDiff(projectStartDate, planStart);
+        const pDuration = getDaysDiff(planStart, planEnd) + 1;
+        
+        return (
+            <div 
+                className="absolute -top-[3px] h-[2px] bg-zinc-200 rounded-full overflow-hidden"
+                style={{
+                    left: `${(pOffset - offsetDays) * dayWidth}px`,
+                    width: `${pDuration * dayWidth}px`,
+                }}
+            />
+        );
+    }, [planStart, planEnd, projectStartDate, offsetDays, dayWidth]);
+
     // Master Range Indicator
     const masterIndicator = useMemo(() => {
         if (!hasMasterRange) return null;
@@ -149,20 +167,20 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
         
         return (
             <div 
-                className="absolute -bottom-2 h-1 bg-amber-400/30 rounded-full overflow-hidden"
+                className="absolute -top-[8px] h-1 bg-amber-400/40 rounded-full overflow-hidden border border-amber-500/10"
                 style={{
                     left: `${(mOffset - offsetDays) * dayWidth}px`,
                     width: `${mDuration * dayWidth}px`,
                 }}
             >
-                <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.5)_4px,rgba(245,158,11,0.5)_8px)]" />
+                <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.6)_4px,rgba(245,158,11,0.6)_8px)]" />
             </div>
         );
     }, [hasMasterRange, task.masterStartDate, task.masterFinishDate, projectStartDate, offsetDays, dayWidth]);
 
     return (
         <div 
-            className={`absolute top-1/2 -translate-y-1/2 group rounded-md overflow-visible h-5
+            className={`absolute top-[7px] bottom-[5px] group overflow-visible
                 ${styles.wrapper}
                 ${isFieldTask ? (dragState?.type === 'move' ? 'cursor-grabbing opacity-80 z-30' : 'cursor-grab') : 'cursor-default'}`}
             style={{ 
@@ -170,52 +188,56 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 width: `${barWidth}px`,
             }}
             onMouseDown={(e) => isFieldTask && handleMouseDown(e, 'move')}
-            title={`${task.name}: ${formatDisplayDate(task.startDate)} to ${formatDisplayDate(task.finishDate)}${hasMasterRange ? ` (Master: ${formatDisplayDate(task.masterStartDate!)} to ${formatDisplayDate(task.masterFinishDate!)})` : ''}`}
+            title={`${task.name}: ${formatDisplayDate(task.fieldStartDate || task.startDate)} to ${formatDisplayDate(task.fieldFinishDate || task.finishDate)}${hasMasterRange ? ` (Master: ${formatDisplayDate(task.masterStartDate!)} to ${formatDisplayDate(task.masterFinishDate!)})` : ''}`}
         >
             {masterIndicator}
+            {plannedIndicator}
             
-            <div 
-              className={`w-full h-full rounded-md border ${styles.bar} shadow-sm relative z-10 flex items-center`}
-            >
-                <div 
-                    className={`h-full rounded-l-[5px] ${styles.progress} transition-all duration-300`}
-                    style={{ 
-                        width: `${displayProgressPercent}%`,
-                    }}
-                ></div>
-                {isFieldTask && (
-                    <div className="absolute left-1 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                        <div className="w-0.5 h-2 bg-current rounded-full" />
-                        <div className="w-0.5 h-2 bg-current rounded-full" />
-                    </div>
-                )}
-            </div>
-
-            <div className="absolute inset-0 flex">
+            <div className="flex h-full relative z-10">
                 {Array.from({ length: durationDays }).map((_, i) => {
-                    const dayDate = addDays(parseLookaheadDate(task.startDate), i);
+                    const dayDate = addDays(taskStart, i);
+                    const dayProgress = Math.min(100, Math.max(0, (task.progress - (i / durationDays * 100)) * durationDays));
+                    
                     return (
-                        <div
+                        <div 
                             key={i}
-                            className="h-full border-r border-white/20 last:border-r-0 cursor-pointer hover:bg-black/5"
+                            className="h-full flex items-center justify-center"
                             style={{ width: `${dayWidth}px` }}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDayClick(task, dayDate);
-                            }}
-                        />
+                        >
+                            <div 
+                                className={`aspect-square w-[65%] border ${styles.bar} shadow-sm relative flex items-center overflow-hidden cursor-pointer hover:brightness-95 transition-all rounded-sm`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDayClick(task, dayDate);
+                                }}
+                            >
+                                {/* Day Progress Fill */}
+                                <div 
+                                    className={`h-full ${styles.progress} transition-all duration-300`}
+                                    style={{ width: `${dayProgress}%` }}
+                                />
+                                
+                                {/* Drag Handle Indicator (only on first square) */}
+                                {isFieldTask && i === 0 && (
+                                    <div className="absolute left-0.5 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <div className="w-1.5 h-0.5 bg-current rounded-full" />
+                                        <div className="w-1.5 h-0.5 bg-current rounded-full" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     );
                 })}
             </div>
             
             {/* Resize Handles */}
             <div 
-                className="absolute left-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
+                className="absolute left-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 z-20"
                 style={{transform: 'translateX(-50%)'}}
                 onMouseDown={(e) => handleMouseDown(e, 'resize-left')}
             />
             <div 
-                className="absolute right-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100" 
+                className="absolute right-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 z-20" 
                 style={{transform: 'translateX(50%)'}}
                 onMouseDown={(e) => handleMouseDown(e, 'resize-right')}
             />

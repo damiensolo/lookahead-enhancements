@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LookaheadTask, ConstraintType, ConstraintStatus } from '../types';
 import { EnhancedTaskSelectionRow } from './EnhancedTaskSelectionRow';
-import { XIcon, SearchIcon } from '../../../common/Icons';
+import { XIcon, SearchIcon, ClipboardIcon, AlertTriangleIcon } from '../../../common/Icons';
 
 interface TaskSelectionModalProps {
   isOpen: boolean;
@@ -56,8 +56,8 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
           </button>
         </div>
 
-        {/* Search */}
-        <div className="p-4 bg-zinc-50 border-b border-black/5">
+        {/* Search & Legend */}
+        <div className="p-4 bg-zinc-50 border-b border-black/5 space-y-4">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
@@ -65,8 +65,38 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
               placeholder="Search tasks by name or contractor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-black/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-white border border-black/10 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
+          </div>
+
+          {/* Legend / Critical Info */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
+            <div className="flex items-center gap-2 group cursor-help">
+              <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wider border border-red-200">CP</span>
+              <span className="text-[11px] font-medium text-zinc-500">Critical Path</span>
+              <div className="hidden group-hover:block absolute bg-zinc-900 text-white text-[10px] p-2 rounded shadow-xl z-[60] max-w-[200px] mt-12">
+                Tasks that must finish on time for the project to finish on time.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 group cursor-help">
+              <div className="px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold border border-blue-100">Slack: 5d</div>
+              <span className="text-[11px] font-medium text-zinc-500">Net Slack</span>
+              <div className="hidden group-hover:block absolute bg-zinc-900 text-white text-[10px] p-2 rounded shadow-xl z-[60] max-w-[200px] mt-12">
+                The amount of time a task can be delayed without delaying the project.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 group cursor-help">
+              <div className="flex items-center gap-1">
+                <ClipboardIcon className="w-3.5 h-3.5 text-amber-500" />
+                <AlertTriangleIcon className="w-3.5 h-3.5 text-red-500" />
+              </div>
+              <span className="text-[11px] font-medium text-zinc-500">Risk Warning</span>
+              <div className="hidden group-hover:block absolute bg-zinc-900 text-white text-[10px] p-2 rounded shadow-xl z-[60] max-w-[200px] mt-12">
+                Unanswered RFIs or Submittals that may delay task start.
+              </div>
+            </div>
           </div>
         </div>
 
@@ -96,14 +126,14 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-black/5 rounded-xl transition-colors"
+              className="px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-black/5 rounded-md transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
               disabled={selectedTasks.size === 0}
-              className="px-6 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20 transition-all"
+              className="px-6 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20 transition-all"
             >
               Add Selected Tasks
             </button>

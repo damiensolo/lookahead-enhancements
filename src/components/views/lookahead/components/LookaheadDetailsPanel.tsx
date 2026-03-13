@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType } from '../types';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS } from '../types';
 import { XIcon, PlusIcon, AlertTriangleIcon } from '../../../common/Icons';
 import ManHoursBar from './ManHoursBar';
+import ContractorSelect from './ContractorSelect';
 import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 
@@ -12,6 +13,7 @@ interface LookaheadDetailsPanelProps {
   onClose: () => void;
   onAddConstraint: (taskId: string | number, constraint: Constraint) => void;
   onUpdateProgress?: (taskId: string | number, progress: number) => void;
+  onUpdateContractor?: (taskId: string | number, contractor: string) => void;
 }
 
 const getStatusDot = (status: ConstraintStatus) => {
@@ -104,7 +106,7 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
 };
 
 
-const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onClose, onAddConstraint, onUpdateProgress }) => {
+const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -165,8 +167,15 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                         <div className="font-semibold text-gray-800 text-sm">{task.taskType}</div>
                     </div>
                     <div>
-                        <div className="text-xs text-gray-500">Contractor</div>
-                        <div className="font-semibold text-gray-800 text-sm">{task.contractor}</div>
+                        <div className="text-xs text-gray-500 mb-1">Contractor</div>
+                        {task.taskType === 'Field Task' ? (
+                            <ContractorSelect
+                                value={task.contractor}
+                                onChange={(val) => onUpdateContractor?.(task.id, val)}
+                            />
+                        ) : (
+                            <div className="font-semibold text-gray-800 text-sm px-1">{task.contractor}</div>
+                        )}
                     </div>
                     <div>
                         <div className="text-xs text-gray-500">Crew Assigned</div>
@@ -180,8 +189,27 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                         </div>
                     </div>
                     <div className="col-span-2">
-                        <div className="text-xs text-gray-500">Dates</div>
-                        <div className="font-semibold text-gray-800 text-sm">{formatDisplayDate(task.startDate)} → {formatDisplayDate(task.finishDate)}</div>
+                        <div className="text-xs text-gray-500 mb-1">Schedule Analysis</div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between p-2 bg-white border border-black/5 rounded-lg">
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Planned</span>
+                                <span className="text-sm font-medium text-zinc-600">{formatDisplayDate(task.startDate)} → {formatDisplayDate(task.finishDate)}</span>
+                            </div>
+                            <div className={`flex items-center justify-between p-2 rounded-lg border ${
+                                (task.fieldStartDate && task.fieldStartDate > task.startDate) || (task.fieldFinishDate && task.fieldFinishDate > task.finishDate)
+                                ? 'bg-red-50 border-red-100'
+                                : 'bg-blue-50 border-blue-100'
+                            }`}>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Field (Actual)</span>
+                                <span className={`text-sm font-bold ${
+                                    (task.fieldStartDate && task.fieldStartDate > task.startDate) || (task.fieldFinishDate && task.fieldFinishDate > task.finishDate)
+                                    ? 'text-red-600'
+                                    : 'text-blue-700'
+                                }`}>
+                                    {formatDisplayDate(task.fieldStartDate || task.startDate)} → {formatDisplayDate(task.fieldFinishDate || task.finishDate)}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 

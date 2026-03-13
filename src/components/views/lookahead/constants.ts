@@ -245,6 +245,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 4,
     startDate: '2026-01-06',
     finishDate: '2027-01-07',
+    slack: 12,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -267,6 +268,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 6,
     startDate: '2026-01-06',
     finishDate: '2026-01-08',
+    slack: 5,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -290,6 +292,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     startDate: '2026-02-07',
     finishDate: '2026-04-10',
     isCriticalPath: true,
+    slack: 0,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -312,6 +315,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 8,
     startDate: '2026-03-10',
     finishDate: '2026-03-27',
+    slack: 2,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -335,6 +339,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     startDate: '2026-04-11',
     finishDate: '2026-09-12',
     isCriticalPath: true,
+    slack: 0,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -357,6 +362,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 6,
     startDate: '2026-04-11',
     finishDate: '2026-09-12',
+    slack: 8,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
@@ -379,14 +385,17 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 10,
     startDate: '2026-07-28',
     finishDate: '2026-08-22',
+    isCriticalPath: true,
+    slack: 0,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Pending,
-      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Pending,
       [ConstraintType.Submittal]: ConstraintStatus.Complete,
       [ConstraintType.Material]: ConstraintStatus.Pending,
     },
     constraints: [
-      { type: ConstraintType.Predecessor, name: 'Structure Completion', status: ConstraintStatus.Pending, severity: 'Blocking' }
+      { type: ConstraintType.Predecessor, name: 'Structure Completion', status: ConstraintStatus.Pending, severity: 'Blocking' },
+      { type: ConstraintType.RFI, name: 'RFI #104: Roof Drain Detail', status: ConstraintStatus.Pending, severity: 'Warning' }
     ],
     manHours: { actual: 0, budget: 3656 },
   },
@@ -403,13 +412,16 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 8,
     startDate: '2026-02-10',
     finishDate: '2026-04-14',
+    slack: 15,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Pending,
       [ConstraintType.RFI]: ConstraintStatus.Complete,
-      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Pending,
       [ConstraintType.Material]: ConstraintStatus.Pending,
     },
-    constraints: [],
+    constraints: [
+      { type: ConstraintType.Submittal, name: 'SUB #042: Brick Sample Approval', status: ConstraintStatus.Pending, severity: 'Warning' }
+    ],
     manHours: { actual: 0, budget: 1274 },
   },
   {
@@ -425,13 +437,18 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     crewAssigned: 4,
     startDate: '2026-03-01',
     finishDate: '2026-05-27',
+    isCriticalPath: true,
+    slack: 0,
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Pending,
-      [ConstraintType.RFI]: ConstraintStatus.Complete,
-      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Pending,
+      [ConstraintType.Submittal]: ConstraintStatus.Pending,
       [ConstraintType.Material]: ConstraintStatus.Pending,
     },
-    constraints: [],
+    constraints: [
+      { type: ConstraintType.RFI, name: 'RFI #112: Panel Location Conflict', status: ConstraintStatus.Pending, severity: 'Blocking' },
+      { type: ConstraintType.Submittal, name: 'SUB #088: Switchgear Shop Drawings', status: ConstraintStatus.Pending, severity: 'Blocking' }
+    ],
     manHours: { actual: 0, budget: 435 },
   }
 ];

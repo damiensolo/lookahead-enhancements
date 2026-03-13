@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { View, ViewMode } from '../../types';
 import { useProject } from '../../context/ProjectContext';
 import FilterMenu from './FilterMenu';
+import ViewSettingsMenu from './ViewSettingsMenu';
 import { PlusIcon, MoreHorizontalIcon, TableIcon, BoardIcon, GanttIcon, LookaheadIcon, SearchIcon, FilterIcon, SpreadsheetIcon, DashboardIcon } from '../common/Icons';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../common/ui/Tooltip';
 
@@ -172,6 +173,8 @@ const ViewControls: React.FC = () => {
                 </div>
 
                 <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                <ViewSettingsMenu />
+                <div className="h-6 w-px bg-gray-300 mx-1"></div>
             </>
         )}
 
@@ -227,8 +230,6 @@ const ViewControls: React.FC = () => {
                     <TooltipContent>Create New View</TooltipContent>
                 </Tooltip>
             </TooltipProvider>
-
-            <div className="h-6 w-px bg-gray-300 mx-2"></div>
         </div>
     </div>
   );

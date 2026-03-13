@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { LookaheadTask, ConstraintStatus, ConstraintType } from '../types';
-import { XIcon, PlusIcon, TrashIcon, ListTreeIcon } from '../../../common/Icons';
+import { LookaheadTask, ConstraintStatus, ConstraintType, CONTRACTORS } from '../types';
+import { XIcon, PlusIcon, TrashIcon, ListTreeIcon, ChevronDownIcon } from '../../../common/Icons';
+import ContractorSelect from './ContractorSelect';
 
 interface FieldBreakdownModalProps {
   isOpen: boolean;
@@ -16,18 +17,27 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
   parentTask,
   onSave,
 }) => {
-  const [subTasks, setSubTasks] = useState<{ id: string; name: string }[]>([]);
+  const [subTasks, setSubTasks] = useState<{ id: string; name: string; fieldStartDate: string; fieldFinishDate: string; contractor: string }[]>([]);
 
   useEffect(() => {
     if (isOpen && parentTask) {
       if (parentTask.children && parentTask.children.length > 0) {
         setSubTasks(parentTask.children.map(child => ({ 
           id: child.id.toString(), 
-          name: child.name 
+          name: child.name,
+          fieldStartDate: child.fieldStartDate || child.startDate,
+          fieldFinishDate: child.fieldFinishDate || child.finishDate,
+          contractor: child.contractor
         })));
       } else {
-        // Default empty state or some initial chunks
-        setSubTasks([{ id: Date.now().toString(), name: '' }]);
+        // Default empty state or some initial sub tasks
+        setSubTasks([{ 
+          id: Date.now().toString(), 
+          name: '', 
+          fieldStartDate: parentTask.startDate, 
+          fieldFinishDate: parentTask.finishDate,
+          contractor: parentTask.contractor
+        }]);
       }
     }
   }, [isOpen, parentTask]);
@@ -35,15 +45,21 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
   if (!isOpen || !parentTask) return null;
 
   const addSubTask = () => {
-    setSubTasks([...subTasks, { id: Date.now().toString(), name: '' }]);
+    setSubTasks([...subTasks, { 
+      id: Date.now().toString(), 
+      name: '', 
+      fieldStartDate: parentTask.startDate, 
+      fieldFinishDate: parentTask.finishDate,
+      contractor: parentTask.contractor
+    }]);
   };
 
   const removeSubTask = (id: string) => {
     setSubTasks(subTasks.filter(st => st.id !== id));
   };
 
-  const updateSubTaskName = (id: string, name: string) => {
-    setSubTasks(subTasks.map(st => st.id === id ? { ...st, name } : st));
+  const updateSubTask = (id: string, updates: Partial<{ name: string; fieldStartDate: string; fieldFinishDate: string; contractor: string }>) => {
+    setSubTasks(subTasks.map(st => st.id === id ? { ...st, ...updates } : st));
   };
 
   const handleSave = () => {
@@ -55,12 +71,14 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
       outline: `${parentTask.outline}.${index + 1}`,
       taskCode: `${parentTask.taskCode}-FB${index + 1}`,
       taskType: 'Field Task',
-      contractor: parentTask.contractor,
+      contractor: st.contractor,
       location: parentTask.location,
       progress: 0,
       crewAssigned: 0,
-      startDate: parentTask.startDate,
-      finishDate: parentTask.finishDate,
+      startDate: parentTask.startDate, // Planned Start remains parent's start
+      finishDate: parentTask.finishDate, // Planned Finish remains parent's finish
+      fieldStartDate: st.fieldStartDate,
+      fieldFinishDate: st.fieldFinishDate,
       masterStartDate: parentTask.startDate,
       masterFinishDate: parentTask.finishDate,
       status: {
@@ -77,7 +95,7 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between p-6 border-b border-black/5 bg-zinc-50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -85,7 +103,7 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-bold text-zinc-900">Field Breakdown (FB)</h2>
-              <p className="text-sm text-zinc-500 mt-1">Break down "{parentTask.name}" into manageable chunks.</p>
+              <p className="text-sm text-zinc-500 mt-1">Break down "{parentTask.name}" into manageable sub tasks.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-full transition-colors">
@@ -95,17 +113,45 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
 
         <div className="p-6 max-h-[60vh] overflow-y-auto">
           <div className="space-y-4">
+            <div className="grid grid-cols-[32px_1fr_200px_120px_120px_32px] gap-3 px-2 mb-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <div className="text-center">#</div>
+              <div>Sub Task Name</div>
+              <div>Responsible Contractor</div>
+              <div>Field Start</div>
+              <div>Field Finish</div>
+              <div></div>
+            </div>
             {subTasks.map((st, index) => (
-              <div key={st.id} className="flex items-center gap-3 animate-in slide-in-from-left-2 duration-200">
+              <div key={st.id} className="grid grid-cols-[32px_1fr_200px_120px_120px_32px] items-center gap-3 animate-in slide-in-from-left-2 duration-200">
                 <div className="flex-shrink-0 w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-xs font-bold text-zinc-500">
                   {index + 1}
                 </div>
                 <input
                   type="text"
                   value={st.name}
-                  onChange={(e) => updateSubTaskName(st.id, e.target.value)}
+                  onChange={(e) => updateSubTask(st.id, { name: e.target.value })}
                   placeholder="e.g., Set formwork, Pour, Cure time..."
-                  className="flex-grow px-4 py-2 bg-white border border-black/10 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                  className="w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+                <ContractorSelect
+                  value={st.contractor}
+                  onChange={(val) => updateSubTask(st.id, { contractor: val })}
+                />
+                <input
+                  type="date"
+                  value={st.fieldStartDate}
+                  min={parentTask.startDate}
+                  max={parentTask.finishDate}
+                  onChange={(e) => updateSubTask(st.id, { fieldStartDate: e.target.value })}
+                  className="w-full px-2 py-2 bg-white border border-black/10 rounded-lg text-[11px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+                <input
+                  type="date"
+                  value={st.fieldFinishDate}
+                  min={st.fieldStartDate}
+                  max={parentTask.finishDate}
+                  onChange={(e) => updateSubTask(st.id, { fieldFinishDate: e.target.value })}
+                  className="w-full px-2 py-2 bg-white border border-black/10 rounded-lg text-[11px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 />
                 <button
                   onClick={() => removeSubTask(st.id)}
@@ -123,7 +169,7 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
             className="mt-6 flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
           >
             <PlusIcon className="w-4 h-4" />
-            Add another chunk
+            Add another sub task
           </button>
         </div>
 

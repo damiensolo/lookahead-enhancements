@@ -1,3 +1,16 @@
+export const CONTRACTORS = [
+  'ABC Concrete',
+  'XYZ Electrical',
+  'Master Plumbing',
+  'Steel Structures Inc.',
+  'Finish Carpentry Ltd.',
+  'Global HVAC',
+  'Precision Drywall',
+  'Apex Roofing',
+  'Titan Earthworks',
+  'Modern Glazing',
+];
+
 export enum ConstraintType {
   Predecessor = 'Predecessor',
   RFI = 'RFI',
@@ -60,6 +73,8 @@ export interface LookaheadTask {
   crewAssigned: number;
   startDate: string; // Plan Start
   finishDate: string; // Plan End
+  fieldStartDate?: string;
+  fieldFinishDate?: string;
   masterStartDate?: string;
   masterFinishDate?: string;
   status: LookaheadStatus;

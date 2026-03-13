@@ -29,7 +29,7 @@ export const formatDateForInput = (dateStr: string): string => {
 export const formatDateFromInput = (dateStr: string): string => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
   const [year, month, day] = dateStr.split('-');
-  return `${month}/${day}/${year}`;
+  return `${month}/${day}/${year.slice(-2)}`;
 };
 
 export const formatDisplayDate = (dateStr: string): string => {

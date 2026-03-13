@@ -230,13 +230,6 @@ const AppHeader: React.FC = () => {
                     {activeViewMode === 'lookahead' ? (
                         <div className="flex items-center gap-2">
                             <button 
-                                onClick={() => setIsAddTaskModalOpen(true)}
-                                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 shadow-sm transition-colors"
-                            >
-                                <PlusIcon className="w-4 h-4" />
-                                <span>Add Task</span>
-                            </button>
-                            <button 
                                 onClick={() => setIsCreateLookaheadModalOpen(true)}
                                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-zinc-800 rounded-md hover:bg-zinc-700 shadow-sm transition-colors"
                             >

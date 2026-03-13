@@ -15,12 +15,11 @@ export const getDefaultLookaheadColumns = (): Column[] => [
   { id: 'status', label: 'Status', width: '140px', visible: true, minWidth: 120 },
   { id: 'taskType', label: 'Task Type', width: '120px', visible: true, minWidth: 40 },
   { id: 'progress', label: 'Progress', width: '100px', visible: true, minWidth: 80 },
-  { id: 'planStart', label: 'Start', width: '100px', visible: true, minWidth: 60 },
-  { id: 'planEnd', label: 'End', width: '100px', visible: true, minWidth: 60 },
+  { id: 'planStart', label: 'Start', width: '80px', visible: true, minWidth: 60 },
+  { id: 'planEnd', label: 'End', width: '80px', visible: true, minWidth: 60 },
   { id: 'contractor', label: 'Contractor', width: '180px', visible: true, minWidth: 80 },
   { id: 'crewAssigned', label: 'Crew Assigned', width: '100px', visible: true, minWidth: 40 },
-  { id: 'location', label: 'Location', width: '100px', visible: true, minWidth: 20 },
-  { id: 'shared', label: 'Shared', width: '60px', visible: true, minWidth: 40 },
+  { id: 'location', label: 'Location', width: '80px', visible: true, minWidth: 20 },
 ];
 
 export const FILTERABLE_COLUMNS: { id: ColumnId, label: string, type: 'text' | 'enum' }[] = [
