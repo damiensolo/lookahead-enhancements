@@ -63,7 +63,7 @@ export const CommitmentModal: React.FC<CommitmentModalProps> = ({
                     type="checkbox"
                     checked={commitment?.plannedQtyAccepted ?? false}
                     onChange={(e) => onSetCommitment({ plannedQtyAccepted: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span>Accept planned quantity</span>
                 </label>
@@ -72,7 +72,7 @@ export const CommitmentModal: React.FC<CommitmentModalProps> = ({
                     type="checkbox"
                     checked={crewAdded}
                     readOnly
-                    className="rounded border-gray-300 text-blue-600 opacity-70"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 opacity-70"
                   />
                   <span>Crew added</span>
                   {crewAdded && (
@@ -94,7 +94,7 @@ export const CommitmentModal: React.FC<CommitmentModalProps> = ({
                     type="checkbox"
                     checked={commitment?.equipmentMaterialVerified ?? false}
                     onChange={(e) => onSetCommitment({ equipmentMaterialVerified: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span>Equipment &amp; material availability verified</span>
                 </label>

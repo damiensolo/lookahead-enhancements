@@ -1166,10 +1166,10 @@ const LookaheadView: React.FC = () => {
                     renderBeforeSearch={
                         <button
                             onClick={() => setIsLeftPanelOpen(prev => !prev)}
-                            className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                            className={`p-1.5 rounded-md transition-colors ${isLeftPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
                             title={isLeftPanelOpen ? "Collapse left table panel" : "Expand left table panel"}
                         >
-                            <PanelLeftIcon className="w-4 h-4" />
+                            <PanelLeftIcon className="w-6 h-6" />
                         </button>
                     }
                 />
@@ -1177,10 +1177,10 @@ const LookaheadView: React.FC = () => {
                                     <ViewSettingsMenu />
                                     <button
                                         onClick={() => setIsRightPanelOpen(prev => !prev)}
-                                        className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                        className={`p-1.5 rounded-md transition-colors ${isRightPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
                                         title={isRightPanelOpen ? "Collapse right panel" : "Expand right panel"}
                                     >
-                                        <PanelRightIcon className="w-4 h-4" />
+                                        <PanelRightIcon className="w-6 h-6" />
                                     </button>
                                 </div>
             </div>
