@@ -106,7 +106,7 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
 
 
   const content = (
-      <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full bg-gray-50">
         <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-4">
                 {forecast && (
@@ -278,7 +278,7 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
 
   if (embedded) return content;
   return (
-    <aside className="absolute top-0 right-0 h-full bg-white border-l border-gray-200 z-50" style={{ width: '420px' }} role="dialog" aria-modal="true" aria-labelledby="daily-metrics-title">
+    <aside className="absolute top-0 right-0 h-full bg-gray-50 border-l border-gray-200 z-50" style={{ width: '420px' }} role="dialog" aria-modal="true" aria-labelledby="daily-metrics-title">
       {content}
     </aside>
   );

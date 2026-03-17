@@ -7,7 +7,13 @@
       "mcp__plugin_figma_figma__generate_figma_design",
       "Bash(cd \"C:\\\\Users\\\\damie\\\\Projects\\\\lookahead-enhancements\" && npm run dev -- --port 5173)",
       "Bash(sleep 4 && curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
-      "Bash(start \"\" \"http://localhost:5173/#figmacapture=88d0a9e7-b221-4911-980c-52b68e93c015&figmaendpoint=https%3A%2F%2Fmcp.figma.com%2Fmcp%2Fcapture%2F88d0a9e7-b221-4911-980c-52b68e93c015%2Fsubmit&figmadelay=2000\")"
+      "Bash(start \"\" \"http://localhost:5173/#figmacapture=88d0a9e7-b221-4911-980c-52b68e93c015&figmaendpoint=https%3A%2F%2Fmcp.figma.com%2Fmcp%2Fcapture%2F88d0a9e7-b221-4911-980c-52b68e93c015%2Fsubmit&figmadelay=2000\")",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(start:*)",
+      "Bash(grep:*)",
+      "Bash(git -C \"C:/Users/damie/Projects/lookahead-enhancements\" diff HEAD -- src/components/views/lookahead/LookaheadView.tsx)",
+      "Bash(git:*)"
     ]
   }
 }

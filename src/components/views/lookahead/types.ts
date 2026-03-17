@@ -99,6 +99,9 @@ export interface LookaheadTask {
   fieldFinishDate?: string;
   masterStartDate?: string;
   masterFinishDate?: string;
+  /** Task-level commitment workflow (used when schedule is In Review) */
+  commitmentStatus?: TaskCommitmentStatus;
+  adjustmentProposal?: TaskAdjustmentProposal;
   status: LookaheadStatus;
   constraints: Constraint[];
   manHours: ManHours;
@@ -118,6 +121,7 @@ export interface LookaheadTask {
 
 export enum ScheduleStatus {
   Draft = 'Draft',
+  InReview = 'In Review',
   Active = 'Active',
   Closed = 'Closed',
 }
@@ -166,4 +170,35 @@ export interface ProjectRisk {
   taskName: string;
   reason: string;
   addedAt: string;
+}
+
+export type TaskCommitmentStatus =
+  | 'pending'
+  | 'committed'
+  | 'rejected'
+  | 'adjustment_proposed'
+  | 'gc_accepted'
+  | 'gc_revised'
+  | 'disputed';
+
+export type AdjustmentActor = 'gc' | 'sub';
+
+export interface AdjustmentHistoryEntry {
+  at: string; // ISO
+  actor: AdjustmentActor;
+  status: TaskCommitmentStatus;
+  summary?: string;
+  proposal?: Omit<TaskAdjustmentProposal, 'history'>;
+}
+
+export interface TaskAdjustmentProposal {
+  proposedStartDate?: string; // YYYY-MM-DD
+  proposedEndDate?: string; // YYYY-MM-DD
+  proposedDuration?: number; // days
+  proposedCrewSize?: number;
+  proposedMaterialNotes?: string;
+  rejectionReason?: string;
+  subNotes?: string;
+  gcResponseNotes?: string;
+  history: AdjustmentHistoryEntry[];
 }

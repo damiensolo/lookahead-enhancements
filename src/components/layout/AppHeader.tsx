@@ -6,6 +6,7 @@ import { ScheduleStatus, LookaheadTask } from '../views/lookahead/types';
 import { parseLookaheadDate } from '../../lib/dateUtils';
 import { compareLookaheadTasks } from '../views/lookahead/utils/diffUtils';
 import { DeltasModal } from '../views/lookahead/components/DeltasModal';
+import { ConfirmationDialog } from '../common/ConfirmationDialog';
 
 const formatValue = (val: number) => 
     Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -13,13 +14,17 @@ const formatValue = (val: number) =>
 const AppHeader: React.FC = () => {
     const { 
         activeViewMode, activeView, setIsCreateLookaheadModalOpen, setIsAddTaskModalOpen,
-        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, deltas, projectRisks
+        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, forcePublishSchedule, submitScheduleForReview, pullBackScheduleToDraft, deltas, projectRisks
     } = useProject();
     const { persona, scCompany } = usePersona();
     const [showRisks, setShowRisks] = useState(false);
 
     const [isDeltasModalOpen, setIsDeltasModalOpen] = useState(false);
     const [currentDeltas, setCurrentDeltas] = useState<any[]>([]);
+
+    const [showPullBackDialog, setShowPullBackDialog] = useState(false);
+    const [showPublishWarningDialog, setShowPublishWarningDialog] = useState(false);
+    const [unresolvedTasksList, setUnresolvedTasksList] = useState<string[]>([]);
 
     const activeSchedule = useMemo(() => 
         schedules.find(s => s.id === activeScheduleId) || schedules[0]
@@ -47,8 +52,32 @@ const AppHeader: React.FC = () => {
         return `${start.toLocaleDateString('default', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     }, []);
 
-    const handlePublishClick = () => {
+    const handlePublishClick = (override = false) => {
         if (!activeScheduleId) return;
+
+        if (activeSchedule.status === ScheduleStatus.InReview && !override) {
+            const all: LookaheadTask[] = [];
+            const walk = (items: LookaheadTask[]) => {
+                items.forEach(t => {
+                    all.push(t);
+                    if (t.children) walk(t.children);
+                });
+            };
+            walk(activeSchedule.tasks);
+            const unresolved = all.filter(t => {
+                const contractor = (t.contractor ?? '').trim();
+                if (!contractor) return false;
+                const st = t.commitmentStatus ?? 'pending';
+                return !(st === 'committed' || st === 'gc_accepted');
+            });
+
+            if (unresolved.length > 0) {
+                setUnresolvedTasksList(unresolved.slice(0, 10).map(t => `- ${t.name} (${t.commitmentStatus ?? 'pending'})`));
+                setShowPublishWarningDialog(true);
+                return;
+            }
+        }
+
         const deltas = previousPublishedSchedule 
             ? compareLookaheadTasks(previousPublishedSchedule.tasks, activeSchedule.tasks)
             : [];
@@ -61,6 +90,29 @@ const AppHeader: React.FC = () => {
             publishSchedule(activeScheduleId);
             setIsDeltasModalOpen(false);
         }
+    };
+
+    const handleConfirmPublishWithWarning = () => {
+        if (!activeScheduleId) return;
+        // Override path: bypass unresolved guard & deltas modal and publish immediately
+        setShowPublishWarningDialog(false);
+        forcePublishSchedule(activeScheduleId);
+    };
+
+    const handleSubmitForReview = () => {
+        if (!activeScheduleId) return;
+        submitScheduleForReview(activeScheduleId);
+    };
+
+    const handlePullBackToDraft = () => {
+        if (!activeScheduleId) return;
+        setShowPullBackDialog(true);
+    };
+
+    const confirmPullBackToDraft = () => {
+        if (!activeScheduleId) return;
+        pullBackScheduleToDraft(activeScheduleId);
+        setShowPullBackDialog(false);
     };
     
     // Dynamic title based on view mode
@@ -139,10 +191,12 @@ const AppHeader: React.FC = () => {
                                                 <span className="text-sm font-semibold text-gray-900">{s.name}</span>
                                                 <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${
                                                     s.status === ScheduleStatus.Draft 
-                                                        ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                                                        : s.status === ScheduleStatus.InReview
+                                                        ? 'bg-amber-100 text-amber-800 border-amber-300'
                                                         : s.status === ScheduleStatus.Closed
                                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
-                                                        : 'bg-green-50 text-green-600 border-green-100'
+                                                        : 'bg-green-50 text-green-700 border-green-200'
                                                 }`}>
                                                     {s.status}
                                                 </span>
@@ -156,7 +210,9 @@ const AppHeader: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
                                     activeSchedule.status === ScheduleStatus.Draft 
-                                        ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                        : activeSchedule.status === ScheduleStatus.InReview
+                                        ? 'bg-amber-200 text-amber-900 border border-amber-300'
                                         : activeSchedule.status === ScheduleStatus.Closed
                                         ? 'bg-gray-100 text-gray-600 border border-gray-300'
                                         : 'bg-green-100 text-green-700 border border-green-200'
@@ -165,12 +221,28 @@ const AppHeader: React.FC = () => {
                                 </span>
                                 {activeSchedule.status === ScheduleStatus.Draft && persona === 'gc' && (
                                     <button 
-                                        onClick={handlePublishClick}
-                                        className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-md hover:bg-blue-700 shadow-sm transition-all flex items-center gap-2"
+                                        onClick={handleSubmitForReview}
+                                        className="px-4 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-md hover:bg-amber-700 shadow-sm transition-all"
                                     >
-                                        <HistoryIcon className="w-3.5 h-3.5" />
-                                        Publish Lookahead
+                                        Submit for Review
                                     </button>
+                                )}
+                                {activeSchedule.status === ScheduleStatus.InReview && persona === 'gc' && (
+                                    <>
+                                        <button 
+                                            onClick={handlePullBackToDraft}
+                                            className="px-3 py-1.5 bg-zinc-100 text-zinc-700 text-xs font-bold rounded-md hover:bg-zinc-200 border border-zinc-200 transition-all"
+                                        >
+                                            Pull back to Draft
+                                        </button>
+                                        <button 
+                                            onClick={() => handlePublishClick(false)} // Pass false for initial publish click
+                                            className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-md hover:bg-blue-700 shadow-sm transition-all flex items-center gap-2"
+                                        >
+                                            <HistoryIcon className="w-3.5 h-3.5" />
+                                            Publish Lookahead
+                                        </button>
+                                    </>
                                 )}
                                 {activeSchedule.status === ScheduleStatus.Active && deltas[activeScheduleId!]?.length > 0 && (
                                     <button 
@@ -288,6 +360,24 @@ const AppHeader: React.FC = () => {
                 deltas={currentDeltas}
                 tasks={activeSchedule.tasks}
                 oldTasks={previousPublishedSchedule?.tasks}
+            />
+            <ConfirmationDialog
+                isOpen={showPullBackDialog}
+                onClose={() => setShowPullBackDialog(false)}
+                onConfirm={confirmPullBackToDraft}
+                title="Pull Back Lookahead to Draft?"
+                message="Subcontractors will be notified and their responses will be preserved as history. Are you sure you want to proceed?"
+                confirmText="Yes, Pull Back"
+                cancelText="No, Keep in Review"
+            />
+            <ConfirmationDialog
+                isOpen={showPublishWarningDialog}
+                onClose={() => setShowPublishWarningDialog(false)}
+                onConfirm={handleConfirmPublishWithWarning} 
+                title="Unresolved Tasks Detected"
+                message={`Cannot publish yet. ${unresolvedTasksList.length} task(s) unresolved:\n\n` + unresolvedTasksList.join('\n') + (unresolvedTasksList.length > 10 ? `\n… +${unresolvedTasksList.length - 10} more` : '') + `\n\nDo you want to override and publish anyway for demonstration purposes?`}
+                confirmText="Override and Publish"
+                cancelText="No, Cancel"
             />
         </header>
     );

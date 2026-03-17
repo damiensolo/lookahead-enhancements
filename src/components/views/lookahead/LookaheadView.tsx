@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS } from './types';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS, TaskCommitmentStatus, TaskAdjustmentProposal } from './types';
 import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS, MOCK_PROJECT_CREW, PROJECT_COMPANY_NAMES } from './constants';
 import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
-import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon, HardHatIcon, HandshakeIcon, AlertTriangleIcon, OctagonXIcon, PanelLeftIcon, PanelRightIcon, XIcon } from '../../common/Icons';
+import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon, HardHatIcon, HandshakeIcon, AlertTriangleIcon, OctagonXIcon, PanelLeftIcon, PanelRightIcon, XIcon, MessageSquareIcon } from '../../common/Icons';
 import ConstraintBadge from './components/ConstraintBadge';
 import ManHoursBar from './components/ManHoursBar';
 import DraggableTaskBar from './components/DraggableTaskBar';
@@ -15,6 +14,7 @@ import { FieldBreakdownModal } from './components/FieldBreakdownModal';
 import { AddCrewModal } from './components/AddCrewModal';
 import { DeltasModal } from './components/DeltasModal';
 import { CommitmentModal } from './components/CommitmentModal';
+import ChatPanel from './components/ChatPanel';
 import { ClashResolutionModal } from './components/ClashResolutionModal';
 import ProgressCell from './components/ProgressCell';
 import ContractorSelect from './components/ContractorSelect';
@@ -72,15 +72,15 @@ const COLUMN_MAPPING: Record<string, LookaheadColumnType> = {
     location: 'location',
 };
 
-const RowNumberCheckbox = ({ 
-    index, 
-    isSelected, 
+const RowNumberCheckbox = ({
+    index,
+    isSelected,
     onToggle,
     isCritical
-}: { 
-    index: string | number; 
-    isSelected: boolean; 
-    onToggle: () => void; 
+}: {
+    index: string | number;
+    isSelected: boolean;
+    onToggle: () => void;
     isCritical?: boolean;
 }) => {
     return (
@@ -93,8 +93,8 @@ const RowNumberCheckbox = ({
                     Critical Task
                 </div>
             )}
-            <input 
-                type="checkbox" 
+            <input
+                type="checkbox"
                 checked={isSelected}
                 onChange={(e) => {
                     e.stopPropagation();
@@ -123,21 +123,58 @@ function filterTasksByContractor(tasks: LookaheadTask[], scCompany: string): Loo
     return out;
 }
 
+const commitmentMeta = (status: TaskCommitmentStatus | undefined) => {
+    const s = status ?? 'pending';
+    switch (s) {
+        case 'pending':
+            return { label: 'Pending', classes: 'bg-gray-50 text-gray-700 border-gray-200' };
+        case 'committed':
+            return { label: 'Committed', classes: 'bg-green-50 text-green-700 border-green-200' };
+        case 'rejected':
+            return { label: 'Rejected', classes: 'bg-red-50 text-red-700 border-red-200' };
+        case 'adjustment_proposed':
+            return { label: 'Adjustment proposed', classes: 'bg-amber-50 text-amber-800 border-amber-200' };
+        case 'gc_accepted':
+            return { label: 'GC accepted', classes: 'bg-teal-50 text-teal-700 border-teal-200' };
+        case 'gc_revised':
+            return { label: 'GC revised', classes: 'bg-purple-50 text-purple-700 border-purple-200' };
+        case 'disputed':
+            return { label: 'Disputed', classes: 'bg-orange-50 text-orange-800 border-orange-200' };
+        default:
+            return { label: s, classes: 'bg-gray-50 text-gray-700 border-gray-200' };
+    }
+};
+
+const flattenTasks = (tasks: LookaheadTask[]) => {
+    const out: LookaheadTask[] = [];
+    const walk = (items: LookaheadTask[]) => {
+        items.forEach(t => {
+            out.push(t);
+            if (t.children?.length) walk(t.children);
+        });
+    };
+    walk(tasks);
+    return out;
+};
+
 const LookaheadView: React.FC = () => {
-    const { 
+    const {
         activeView, setColumns, createDraft, schedules, activeScheduleId, updateScheduleTasks, publishSchedule, deltas,
         isCreateLookaheadModalOpen, setIsCreateLookaheadModalOpen,
         isAddTaskModalOpen, setIsAddTaskModalOpen,
-        commitmentByTaskId, setCommitment, addProjectRisk
+        commitmentByTaskId, setCommitment, addProjectRisk,
+        activityFeedByScheduleId,
+        commitTask, rejectTask, proposeTaskAdjustment,
+        gcAcceptAdjustment, gcCounterPropose, gcMarkDisputed
     } = useProject();
     const { persona, scCompany } = usePersona();
     const { columns, displayDensity, fontSize } = activeView;
 
-    const activeSchedule = useMemo(() => 
+    const activeSchedule = useMemo(() =>
         schedules.find(s => s.id === activeScheduleId) || schedules[0]
     , [schedules, activeScheduleId]);
 
-    const previousPublishedSchedule = useMemo(() => 
+    const previousPublishedSchedule = useMemo(() =>
         [...schedules]
             .filter(s => s.status === ScheduleStatus.Active || s.status === ScheduleStatus.Closed)
             .sort((a, b) => (b.version || 0) - (a.version || 0))[0]
@@ -196,7 +233,8 @@ const LookaheadView: React.FC = () => {
     const [addCrewContext, setAddCrewContext] = useState<{ taskId: string | number; dateString: string } | null>(null);
     const [taskForCommitmentModal, setTaskForCommitmentModal] = useState<LookaheadTask | null>(null);
     const [isPanelClosing, setIsPanelClosing] = useState(false);
-    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+    const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('chat');
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
     const handleCloseRightPanel = useCallback(() => {
@@ -204,7 +242,7 @@ const LookaheadView: React.FC = () => {
         setSelectedTask(null);
         setIsRightPanelOpen(false); // Close the panel
     }, []);
-    
+
     const allTaskIds = useMemo(() => {
         const ids: (string | number)[] = [];
         const flatten = (tasks: LookaheadTask[]) => {
@@ -275,11 +313,12 @@ const LookaheadView: React.FC = () => {
     const toggleAllSelection = () => {
         if (selectedRowIds.size === allTaskIds.length) {
             setSelectedRowIds(new Set());
-        } else {
+        }
+        else {
             setSelectedRowIds(new Set(allTaskIds));
         }
     };
-    
+
     // Sync local state when active schedule changes
     useEffect(() => {
         setPlannerTasks(activeSchedule.tasks);
@@ -299,7 +338,7 @@ const LookaheadView: React.FC = () => {
     const rightScrollRef = useRef<HTMLDivElement>(null);
     const plannerContainerRef = useRef<HTMLDivElement>(null);
     const scrollSyncRef = useRef(false);
-    
+
     const syncVerticalScroll = useCallback((source: 'left' | 'right') => {
         if (scrollSyncRef.current) return;
         scrollSyncRef.current = true;
@@ -307,12 +346,13 @@ const LookaheadView: React.FC = () => {
         const right = rightScrollRef.current;
         if (source === 'left' && left && right) {
             right.scrollTop = left.scrollTop;
-        } else if (source === 'right' && left && right) {
+        }
+        else if (source === 'right' && left && right) {
             left.scrollTop = right.scrollTop;
         }
         scrollSyncRef.current = false;
     }, []);
-    
+
     useEffect(() => {
         const left = leftScrollRef.current;
         const handleScroll = () => {
@@ -326,8 +366,9 @@ const LookaheadView: React.FC = () => {
     }, []);
 
     const visiblePanelColumns = useMemo(() => {
+        const isInReview = activeSchedule?.status === ScheduleStatus.InReview;
         const filtered = columns
-            .filter(col => col.visible && COLUMN_MAPPING[col.id] && !(col.id === 'actions' && activeSchedule?.status === ScheduleStatus.Closed) && !(col.id === 'commitment' && persona !== 'sc') && !(col.id === 'contractor' && persona === 'sc'))
+            .filter(col => col.visible && COLUMN_MAPPING[col.id] && !(col.id === 'actions' && activeSchedule?.status === ScheduleStatus.Closed) && !(col.id === 'commitment' && !(persona === 'sc' || isInReview)) && !(col.id === 'contractor' && persona === 'sc'))
             .map(col => ({
                 ...col,
                 lookaheadType: COLUMN_MAPPING[col.id]!,
@@ -358,7 +399,8 @@ const LookaheadView: React.FC = () => {
                 // This column is eligible to be sticky and is still in the leading prefix.
                 isSticky = true;
                 hasStartedSticky = true;
-            } else if (hasStartedSticky) {
+            }
+            else if (hasStartedSticky) {
                 // We have started the sticky prefix but this column is not eligible,
                 // so mark that the sticky prefix has ended.
                 encounteredNonStickyAfterPrefix = true;
@@ -523,18 +565,18 @@ const LookaheadView: React.FC = () => {
                         updatedTask.progress = progress;
                     }
                 }
-                
+
                 if (task.children && task.children.length > 0) {
                     updatedTask.children = updateRecursively(task.children);
                     // Recalculate parent progress based on children
                     const totalProgress = updatedTask.children.reduce((acc, child) => acc + child.progress, 0);
                     updatedTask.progress = Math.round(totalProgress / updatedTask.children.length);
                 }
-                
+
                 if (selectedTask && selectedTask.id === task.id) {
                     setSelectedTask(updatedTask);
                 }
-                
+
                 return updatedTask;
             });
         };
@@ -568,16 +610,17 @@ const LookaheadView: React.FC = () => {
                     const newStatus = { ...task.status };
                     if (newConstraint.severity === 'Blocking') {
                         newStatus[newConstraint.type] = ConstraintStatus.Overdue;
-                    } else if (newConstraint.severity === 'Warning' && newStatus[newConstraint.type] === ConstraintStatus.Complete) {
+                    }
+                    else if (newConstraint.severity === 'Warning' && newStatus[newConstraint.type] === ConstraintStatus.Complete) {
                         newStatus[newConstraint.type] = ConstraintStatus.Pending;
                     }
-                    
+
                     const updatedTask = {
                         ...task,
                         constraints: updatedConstraints,
                         status: newStatus,
                     };
-    
+
                     if (selectedTask && selectedTask.id === taskId) {
                         setSelectedTask(updatedTask);
                     }
@@ -617,7 +660,7 @@ const LookaheadView: React.FC = () => {
         };
         setPlannerTasks(prev => updateRecursively(prev));
     }, []);
-    
+
     const handleUpdateAssignedCrew = useCallback((taskId: string | number, date: string, crewIds: string[]) => {
         const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => tasks.map(task => {
             if (String(task.id) === String(taskId)) {
@@ -634,9 +677,10 @@ const LookaheadView: React.FC = () => {
         const forecast = weatherByDate.get(dateString);
         setSelectedTask(task);
         setSelectedDay({ task, date, forecast });
+        setRightPanelView('details');
         setIsRightPanelOpen(true);
     }, [weatherByDate]);
-    
+
     const handleConstraintBadgeClick = useCallback((task: LookaheadTask) => {
         setSelectedDay(null);
         setSelectedTask(task);
@@ -743,7 +787,7 @@ const LookaheadView: React.FC = () => {
         weekStart.setDate(weekStart.getDate() - weekStart.getDay());
         const weekEnd = addDays(weekStart, 6);
         const label = `${weekStart.toLocaleString('default', { month: 'short' })} ${weekStart.getDate()} - ${weekEnd.toLocaleString('default', { month: 'short' })} ${weekEnd.getDate()}, ${weekEnd.getFullYear()}`;
-        
+
         let daysInWeek = 0;
         for (let i = 0; i < 7 && addDays(currentDate, i) <= projectEndDate; i++) {
             daysInWeek++;
@@ -827,6 +871,21 @@ const LookaheadView: React.FC = () => {
                 );
             }
             case 'commitment': {
+                const isInReview = activeSchedule.status === ScheduleStatus.InReview;
+                if (isInReview) {
+                    if (level > 0) return null;
+                    const meta = commitmentMeta(task.commitmentStatus);
+                    const elevated = task.commitmentStatus === 'rejected' || task.commitmentStatus === 'adjustment_proposed' || task.commitmentStatus === 'disputed';
+                    return (
+                        <div className="flex items-center justify-center w-full">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all duration-200 ${meta.classes} ${elevated ? 'ring-2 ring-amber-200' : ''}`}>
+                                {meta.label}
+                            </span>
+                        </div>
+                    );
+                }
+
+                // Legacy prototype commitment (SC net-new tasks) for Draft/Active
                 if (persona !== 'sc' || level > 0) return null;
                 const status = commitmentByTaskId[task.id]?.status ?? 'pending';
                 const isNetNew = netNewTaskIds.has(task.id);
@@ -999,10 +1058,12 @@ const LookaheadView: React.FC = () => {
                     if (latestClash.status === 'Unresolved') {
                         clashClasses = 'text-amber-700 font-semibold bg-amber-50 border border-amber-300';
                         clashTitle = `Location clash detected: ${latestClash.location} (Unresolved) – click to resolve`;
-                    } else if (latestClash.status === 'Accepted risk') {
+                    }
+                    else if (latestClash.status === 'Accepted risk') {
                         clashClasses = 'text-amber-700 font-semibold bg-amber-50 border border-amber-300';
                         clashTitle = `Location clash detected: ${latestClash.location} (Accepted risk) – click to view/modify`;
-                    } else if (latestClash.status === 'Resolved') {
+                    }
+                    else if (latestClash.status === 'Resolved') {
                         clashClasses = 'text-green-700 font-semibold bg-green-50 border border-green-300';
                         clashTitle = `Location clash: ${latestClash.location} (Resolved) – click to view`;
                     }
@@ -1065,7 +1126,7 @@ const LookaheadView: React.FC = () => {
                 return null;
         }
     };
-    
+
     const renderLeftRow = (task: LookaheadTask, level: number, rowIndex: number) => {
         const isSelected = selectedRowIds.has(task.id);
         const isFieldTask = task.taskType === 'Field Task';
@@ -1074,7 +1135,7 @@ const LookaheadView: React.FC = () => {
                 key={task.id} 
                 className={`group flex transition-colors cursor-pointer ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`} 
                 style={{ height: `${rowHeight}px` }}
-                onClick={() => { setSelectedDay(null); setSelectedTask(task); setIsRightPanelOpen(true); }}
+                onClick={() => { setSelectedDay(null); setSelectedTask(task); setRightPanelView('details'); setIsRightPanelOpen(true); }}
             >
                 <div 
                     className={`flex ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`}
@@ -1121,6 +1182,8 @@ const LookaheadView: React.FC = () => {
                         onDayClick={handleDayClick}
                         offsetLeft={0}
                         disabled={activeSchedule.status === ScheduleStatus.Closed}
+                        bufferDaysBefore={bufferDaysBefore}
+                        periodDurationDays={periodDurationDays}
                     />
                 </div>
             </div>
@@ -1161,318 +1224,552 @@ const LookaheadView: React.FC = () => {
 
     return (
         <div className="flex h-full flex-col p-4 gap-4">
-            <div className="flex items-center justify-between">
-                <ViewControls
-                    renderBeforeSearch={
-                        <button
-                            onClick={() => setIsLeftPanelOpen(prev => !prev)}
-                            className={`p-1.5 rounded-md transition-colors ${isLeftPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
-                            title={isLeftPanelOpen ? "Collapse left table panel" : "Expand left table panel"}
-                        >
-                            <PanelLeftIcon className="w-6 h-6" />
-                        </button>
-                    }
-                />
-                                <div className="flex items-center gap-2">
-                                    <ViewSettingsMenu />
-                                    <button
-                                        onClick={() => setIsRightPanelOpen(prev => !prev)}
-                                        className={`p-1.5 rounded-md transition-colors ${isRightPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
-                                        title={isRightPanelOpen ? "Collapse right panel" : "Expand right panel"}
-                                    >
-                                        <PanelRightIcon className="w-6 h-6" />
-                                    </button>
-                                </div>
-            </div>
-            
-            <div 
-                className="flex-grow flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative" 
-                style={{ '--table-font-size': `${fontSize}px` } as React.CSSProperties}
-            >
-                {/* Main Planner - Split view with independent scrollbars */}
-                <div ref={plannerContainerRef} className="flex-grow overflow-hidden flex min-w-0">
-                    {/* Left pane - table columns; togglable like right details panel */}
-                    <div
-                        className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col"
-                        style={{ width: isLeftPanelOpen ? effectiveLeftViewportWidth : 0 }}
-                    >
-                        <div
-                            ref={leftScrollRef}
-                            className="flex-shrink-0 overflow-auto flex flex-col border-r-0 h-full"
-                            style={{ width: `${effectiveLeftViewportWidth}px`, minWidth: `${MIN_LEFT_VIEWPORT}px` }}
-                            onScroll={() => syncVerticalScroll('left')}
-                        >
-                        <div className="sticky top-0 z-40 bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-t border-b border-gray-200 flex-shrink-0">
-                            <div className="border-b border-gray-200" style={{ height: '30px' }}>
-                                <div className="bg-gray-50 flex" style={{ width: `${totalLeftPanelWidth}px`, minHeight: '30px' }} />
-                            </div>
-                            <div className="flex" style={{ height: '50px' }}>
-                                <div className="flex bg-gray-50" style={{ width: `${totalLeftPanelWidth}px` }}>
-                                    {visiblePanelColumns.map((col, index) => (
-                                        <div
-                                            key={col.id}
-                                            className={`flex-shrink-0 flex items-end pb-1 px-2 text-xs font-semibold text-gray-600 uppercase relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${col.isSticky ? 'sticky z-30 bg-gray-50' : ''}`}
-                                            style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
-                                        >
-                                            {col.lookaheadType === 'sNo' ? (
-                                                <div className="flex items-center justify-center w-full mb-0.5">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedRowIds.size > 0 && selectedRowIds.size === allTaskIds.length}
-                                                        ref={(el) => {
-                                                            if (el) {
-                                                                el.indeterminate = selectedRowIds.size > 0 && selectedRowIds.size < allTaskIds.length;
-                                                            }
-                                                        }}
-                                                        onChange={toggleAllSelection}
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <span className="truncate w-full min-w-0">{col.label}</span>
-                                            )}
-                                            <Resizer
-                                                onMouseDown={(e) => handleMouseDown(e, col.id, col.widthPx, index === visiblePanelColumns.length - 1)}
-                                                isLast={index === visiblePanelColumns.length - 1}
-                                            />
-                                            {index === visiblePanelColumns.length - 1 && (
-                                                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-gray-300/30 pointer-events-none" />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+            {activeSchedule.status === ScheduleStatus.InReview && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-xs font-bold uppercase tracking-wider text-amber-900">In Review</div>
+                            <div className="text-sm text-amber-900/90">
+                                {persona === 'gc'
+                                    ? 'Subcontractors are reviewing assigned tasks. Resolve all tasks before publishing to Active.'
+                                    : 'This lookahead is awaiting your response. Please commit, propose adjustments, or reject all assigned tasks.'}
                             </div>
                         </div>
-                        <div className="bg-white flex-shrink-0" style={{ fontSize: `${fontSize}px` }}>
-                            {renderLeftRows()}
-                        </div>
-                        </div>
-                    </div>
-
-                    {isLeftPanelOpen && <SplitResizer />}
-
-                    {/* Right panel - timeline, both scrolls */}
-                    <div
-                        ref={rightScrollRef}
-                        className="flex-1 overflow-auto min-w-0"
-                        onScroll={() => syncVerticalScroll('right')}
-                    >
-                        <div className="relative" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
-                            {/* Background grid */}
-                            <div
-                                className="absolute top-0 left-0 w-full h-full pt-[80px] grid"
-                                style={{ zIndex: 0, gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
-                                aria-hidden="true"
-                            >
-                                {Array.from({ length: totalDays }).map((_, i) => {
-                                    const date = addDays(projectStartDate, i);
-                                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                                    const isBuffer = isDayBuffer(i);
-                                    return (
-                                        <div
-                                            key={i}
-                                            className={`h-full border-r ${isBuffer ? 'bg-gray-100 border-gray-200' : isWeekend ? 'bg-gray-50 border-gray-100' : 'border-gray-100'}`}
-                                            title={isBuffer ? 'Outside lookahead period' : undefined}
-                                        />
-                                    );
-                                })}
+                        {persona === 'gc' && (
+                            <div className="text-xs text-amber-900/80">
+                                Recent activity: {(activityFeedByScheduleId[activeSchedule.id] ?? []).length}
                             </div>
-
-                            {/* Timeline header */}
-                            <div className="sticky top-0 bg-gray-50 z-40 text-xs font-semibold text-gray-600 uppercase border-b border-t border-gray-200">
-                                <div className="flex border-b border-gray-200" style={{ height: '30px' }}>
-                                    {weekHeaders.map((week, i) => (
-                                        <div key={i} className="flex items-center justify-center border-r border-gray-200 flex-shrink-0 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-1" style={{ width: `${week.days * DAY_WIDTH}px` }} title={week.label}>{week.label}</div>
-                                    ))}
-                                </div>
-                                <div
-                                    className="grid flex-shrink-0"
-                                    style={{ height: '50px', gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
-                                >
-                                    {Array.from({ length: totalDays }).map((_, i) => {
-                                        const date = addDays(projectStartDate, i);
-                                        const dateString = formatDateISO(date);
-                                        const forecast = weatherByDate.get(dateString) ?? { date: dateString, icon: 'cloud' as const, temp: 70 };
-                                        const isBuffer = isDayBuffer(i);
-                                        return (
-                                            <div
-                                                key={i}
-                                                className={`flex flex-col items-center justify-between py-1 border-r border-gray-200 ${isBuffer ? 'bg-gray-100 opacity-60 pointer-events-none' : ''}`}
-                                                title={isBuffer ? 'Outside lookahead period' : `${forecast.temp}°F`}
-                                            >
-                                                <div className="flex items-center">
-                                                    <span className={`text-[10px] mr-0.5 ${isBuffer ? 'text-gray-400' : 'text-gray-400'}`}>{date.toLocaleString('default', { weekday: 'short' })[0]}</span>
-                                                    <span className={isBuffer ? 'font-normal text-gray-500' : 'font-normal'}>{date.getDate()}</span>
-                                                </div>
-                                                <div className="h-7 flex flex-col items-center justify-center">
-                                                    {!isBuffer && (
-                                                        <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
-                                                            <WeatherIcon icon={forecast.icon} />
-                                                            <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
-                                                        </div>
-                                                    )}
-                                                    {isBuffer && <div style={{ height: '28px' }} />}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Timeline body */}
-                            <div className="relative z-10">
-                                {renderRightRows()}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right pane - always in layout; width 0 when closed so content is pushed, not overlayed */}
-                    <div
-                        className="flex-shrink-0 overflow-hidden bg-white border-l border-gray-200 flex flex-col"
-                        style={{
-                            width: isRightPanelOpen ? 420 : 0,
-                            transition: 'width 200ms cubic-bezier(0.32, 0.72, 0, 1)',
-                        }}
-                        role="region"
-                        aria-label="Details panel"
-                    >
-                        {isRightPanelOpen && (
-                            <>
-                                {selectedDay ? (
-                                    <DailyMetricsPanel
-                                        data={{
-                                            ...selectedDay,
-                                            task: findTaskById(plannerTasks, selectedDay.task.id) ?? selectedDay.task,
-                                        }}
-                                        onClose={handleCloseRightPanel}
-                                        onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
-                                        onUpdateAssignedCrew={
-                                            activeSchedule.status === ScheduleStatus.Active &&
-                                            PROJECT_COMPANY_NAMES.some(c => selectedDay.task.contractor?.includes(c))
-                                                ? handleUpdateAssignedCrew
-                                                : undefined
-                                        }
-                                        onOpenAddCrew={
-                                            activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
-                                                ? (taskId, dateStr) => setAddCrewContext({ taskId, dateString: dateStr })
-                                                : undefined
-                                        }
-                                        isActive={activeSchedule.status === ScheduleStatus.Active}
-                                        projectCrew={MOCK_PROJECT_CREW}
-                                        embedded
-                                    />
-                                ) : selectedTask ? (
-                                    <LookaheadDetailsPanel
-                                        task={findTaskById(plannerTasks, selectedTask.id) ?? selectedTask}
-                                        taskDelta={activeScheduleId ? (deltas[activeScheduleId] || []).find(d => String(d.taskId) === String(selectedTask.id)) : undefined}
-                                        onClose={handleCloseRightPanel}
-                                        onAddConstraint={activeSchedule.status !== ScheduleStatus.Closed ? handleAddConstraint : undefined}
-                                        onUpdateProgress={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateProgress : undefined}
-                                        onUpdateContractor={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateContractor : undefined}
-                                        onUpdatePlannedQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdatePlannedQuantity : undefined}
-                                        onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
-                                        onOpenAddCrew={
-                                            activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
-                                                ? (taskId, dateString) => setAddCrewContext({ taskId, dateString })
-                                                : undefined
-                                        }
-                                        isDraft={activeSchedule.status === ScheduleStatus.Draft}
-                                        isReadOnly={activeSchedule.status === ScheduleStatus.Closed}
-                                        embedded
-                                        commitment={commitmentByTaskId[selectedTask.id]}
-                                        isNetNew={netNewTaskIds.has(selectedTask.id)}
-                                        isTopLevelTask={tasksForDisplay.some(t => String(t.id) === String(selectedTask.id))}
-                                        onSetCommitment={(state) => setCommitment(selectedTask.id, state)}
-                                        persona={persona}
-                                        addProjectRisk={addProjectRisk}
-                                        onOpenCommitmentModal={() => setTaskForCommitmentModal(selectedTask)}
-                                    />
-                                ) : (
-                                    /* Empty state: panel open but nothing selected */
-                                    <div className="flex flex-col h-full">
-                                        <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-                                            <h2 className="text-lg font-semibold text-gray-800">Details</h2>
-                                            <button
-                                                onClick={() => setIsRightPanelOpen(false)}
-                                                className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                                                aria-label="Close panel"
-                                            >
-                                                <XIcon className="w-5 h-5" />
-                                            </button>
-                                        </header>
-                                        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
-                                            <p className="text-sm font-medium text-gray-700 mb-1">No task or day selected</p>
-                                            <p className="text-xs">Select a task row or a day cell in the timeline to view details here.</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
                         )}
                     </div>
                 </div>
-            </div>
-
-            <TaskSelectionModal
-                isOpen={isAddTaskModalOpen}
-                onClose={() => setIsAddTaskModalOpen(false)}
-                onConfirm={handleAddTasks}
-                availableTasks={MASTER_SCHEDULE_TASKS}
-            />
-
-            <CreateLookaheadModal
-                isOpen={isCreateLookaheadModalOpen}
-                onClose={() => setIsCreateLookaheadModalOpen(false)}
-                onCreate={handleCreateLookahead}
-                previousStartDate={previousPublishedSchedule?.publishedAt?.split('T')[0]}
-                previousDurationDays={previousDurationDays}
-            />
-
-            <FieldBreakdownModal
-                isOpen={isFieldBreakdownModalOpen}
-                onClose={() => setIsFieldBreakdownModalOpen(false)}
-                parentTask={taskToBreakdown}
-                onSave={handleSaveBreakdown}
-            />
-
-            {addCrewContext && (
-                <AddCrewModal
-                    isOpen={true}
-                    onClose={() => setAddCrewContext(null)}
-                    onConfirm={(crewIds) => {
-                        const taskId = addCrewContext.taskId;
-                        handleUpdateAssignedCrew(taskId, addCrewContext.dateString, crewIds);
-                        setAddCrewContext(null);
-                        // Show commitment modal so user sees "Crew added" updated (or open it if they added crew from elsewhere)
-                        if (persona === 'sc' && netNewTaskIds.has(taskId)) {
-                            const task = findTaskById(plannerTasks, taskId);
-                            setTaskForCommitmentModal(task ?? ({ id: taskId } as LookaheadTask));
-                        }
-                    }}
-                    availableCrew={MOCK_PROJECT_CREW}
-                    alreadyAssigned={(findTaskById(plannerTasks, addCrewContext.taskId)?.assignedCrewByDate?.[addCrewContext.dateString] ?? [])}
-                />
             )}
 
-            <CommitmentModal
-                isOpen={!!taskForCommitmentModal}
-                onClose={() => setTaskForCommitmentModal(null)}
-                task={taskForCommitmentModal ? (findTaskById(plannerTasks, taskForCommitmentModal.id) ?? taskForCommitmentModal) : null}
-                commitment={taskForCommitmentModal ? commitmentByTaskId[taskForCommitmentModal.id] : null}
-                onSetCommitment={(state) => taskForCommitmentModal && setCommitment(taskForCommitmentModal.id, state)}
-                addProjectRisk={addProjectRisk}
-                onOpenAddCrew={activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0 ? (taskId, dateString) => setAddCrewContext({ taskId, dateString }) : undefined}
-            />
+            {/* Subcontractor focused review view */}
+            {activeSchedule.status === ScheduleStatus.InReview && persona === 'sc' ? (
+                <SubReviewCards
+                    scheduleId={activeSchedule.id}
+                    scCompany={scCompany}
+                    tasks={flattenTasks(tasksForDisplay).filter(t => !t.children?.length)}
+                    onCommit={(taskId) => commitTask(activeSchedule.id, taskId, scCompany)}
+                    onReject={(taskId, payload) => rejectTask(activeSchedule.id, taskId, payload, scCompany)}
+                    onPropose={(taskId, payload) => proposeTaskAdjustment(activeSchedule.id, taskId, payload, scCompany)}
+                />
+            ) : (
+                <>
+                    <div className="flex items-center justify-between">
+                        <ViewControls
+                            renderBeforeSearch={
+                                <button
+                                    onClick={() => setIsLeftPanelOpen(prev => !prev)}
+                                    className={`p-1.5 rounded-md transition-colors ${isLeftPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                                    title={isLeftPanelOpen ? "Collapse left table panel" : "Expand left table panel"}
+                                >
+                                    <PanelLeftIcon className="w-6 h-6" />
+                                </button>
+                            }
+                        />
+                        <div className="flex items-center gap-2">
+                            <ViewSettingsMenu />
+                            <button
+                                onClick={() => {
+                                    const chatIsActive = isRightPanelOpen && rightPanelView === 'chat';
+                                    if (chatIsActive) {
+                                        setIsRightPanelOpen(false);
+                                    }
+                                    else {
+                                        setRightPanelView('chat');
+                                        setIsRightPanelOpen(true);
+                                    }
+                                }}
+                                className={`p-1.5 rounded-md transition-colors ${isRightPanelOpen && rightPanelView === 'chat' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                                title="Team chat"
+                            >
+                                <MessageSquareIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => setIsRightPanelOpen(prev => !prev)}
+                                className={`p-1.5 rounded-md transition-colors ${isRightPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                                title={isRightPanelOpen ? "Collapse right panel" : "Expand right panel"}
+                            >
+                                <PanelRightIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+                    <div
+                        className="flex-grow flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative"
+                        style={{ '--table-font-size': `${fontSize}px` } as React.CSSProperties}
+                    >
+                        {/* Main Planner - Split view with independent scrollbars */}
+                        <div ref={plannerContainerRef} className="flex-grow overflow-hidden flex min-w-0">
+                            {/* Left pane - table columns; togglable like right details panel */}
+                            <div
+                                className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col"
+                                style={{ width: isLeftPanelOpen ? effectiveLeftViewportWidth : 0 }}
+                            >
+                                <div
+                                    ref={leftScrollRef}
+                                    className="flex-shrink-0 overflow-auto flex flex-col border-r-0 h-full"
+                                    style={{ width: `${effectiveLeftViewportWidth}px`, minWidth: `${MIN_LEFT_VIEWPORT}px` }}
+                                    onScroll={() => syncVerticalScroll('left')}
+                                >
+                                    <div className="sticky top-0 z-40 bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-t border-b border-gray-200 flex-shrink-0">
+                                        <div className="border-b border-gray-200" style={{ height: '30px' }}>
+                                            <div className="bg-gray-50 flex" style={{ width: `${totalLeftPanelWidth}px`, minHeight: '30px' }} />
+                                        </div>
+                                        <div className="flex" style={{ height: '50px' }}>
+                                            <div className="flex bg-gray-50" style={{ width: `${totalLeftPanelWidth}px` }}>
+                                                {visiblePanelColumns.map((col, index) => (
+                                                    <div
+                                                        key={col.id}
+                                                        className={`flex-shrink-0 flex items-end pb-1 px-2 text-xs font-semibold text-gray-600 uppercase relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${col.isSticky ? `sticky z-30 bg-gray-50` : ''}`}
+                                                        style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
+                                                    >
+                                                        {col.lookaheadType === 'sNo' ? (
+                                                            <div className="flex items-center justify-center w-full mb-0.5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedRowIds.size > 0 && selectedRowIds.size === allTaskIds.length}
+                                                                    ref={(el) => {
+                                                                        if (el) {
+                                                                            el.indeterminate = selectedRowIds.size > 0 && selectedRowIds.size < allTaskIds.length;
+                                                                        }
+                                                                    }}
+                                                                    onChange={toggleAllSelection}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <span className="truncate w-full min-w-0">{col.label}</span>
+                                                        )}
+                                                        <Resizer
+                                                            onMouseDown={(e) => handleMouseDown(e, col.id, col.widthPx, index === visiblePanelColumns.length - 1)}
+                                                            isLast={index === visiblePanelColumns.length - 1}
+                                                        />
+                                                        {index === visiblePanelColumns.length - 1 && (
+                                                            <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-gray-300/30 pointer-events-none" />
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white flex-shrink-0" style={{ fontSize: `${fontSize}px` }}>
+                                        {renderLeftRows()}
+                                    </div>
+                                </div>
+                            </div>
 
-            <ClashResolutionModal
-                clash={activeClash}
-                isOpen={!!activeClash}
-                onClose={() => setActiveClash(null)}
-                onSave={(updated) => {
-                    setClashes(prev => prev.map(c => (c.id === updated.id ? updated : c)));
-                }}
-            />
+                            {isLeftPanelOpen && <SplitResizer />}
+
+                            {/* Right panel - timeline, both scrolls */}
+                            <div
+                                ref={rightScrollRef}
+                                className="flex-1 overflow-auto min-w-0"
+                                onScroll={() => syncVerticalScroll('right')}
+                            >
+                                <div className="relative" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
+                                    {/* Background grid */}
+                                    <div
+                                        className="absolute top-0 left-0 w-full h-full pt-[80px] grid"
+                                        style={{ zIndex: 0, gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
+                                        aria-hidden="true"
+                                    >
+                                        {Array.from({ length: totalDays }).map((_, i) => {
+                                            const date = addDays(projectStartDate, i);
+                                            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                            const isBuffer = isDayBuffer(i);
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className={`h-full border-r ${isBuffer ? 'bg-gray-100 border-gray-200' : isWeekend ? 'bg-gray-50 border-gray-100' : 'border-gray-100'}`}
+                                                    title={isBuffer ? 'Outside lookahead period' : undefined}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Timeline header */}
+                                    <div className="sticky top-0 bg-gray-50 z-40 text-xs font-semibold text-gray-600 uppercase border-b border-t border-gray-200">
+                                        <div className="flex border-b border-gray-200" style={{ height: '30px' }}>
+                                            {weekHeaders.map((week, i) => (
+                                                <div key={i} className="flex items-center justify-center border-r border-gray-200 flex-shrink-0 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-1" style={{ width: `${week.days * DAY_WIDTH}px` }} title={week.label}>{week.label}</div>
+                                            ))}
+                                        </div>
+                                        <div
+                                            className="grid flex-shrink-0"
+                                            style={{ height: '50px', gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
+                                        >
+                                            {Array.from({ length: totalDays }).map((_, i) => {
+                                                const date = addDays(projectStartDate, i);
+                                                const dateString = formatDateISO(date);
+                                                const forecast = weatherByDate.get(dateString) ?? { date: dateString, icon: 'cloud' as const, temp: 70 };
+                                                const isBuffer = isDayBuffer(i);
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className={`flex flex-col items-center justify-between py-1 border-r border-gray-200 ${isBuffer ? 'bg-gray-100 opacity-60 pointer-events-none' : ''}`}
+                                                        title={isBuffer ? 'Outside lookahead period' : `${forecast.temp}°F`}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            <span className={`text-[10px] mr-0.5 ${isBuffer ? 'text-gray-400' : 'text-gray-400'}`}>{date.toLocaleString('default', { weekday: 'short' })[0]}</span>
+                                                            <span className={isBuffer ? 'font-normal text-gray-500' : 'font-normal'}>{date.getDate()}</span>
+                                                        </div>
+                                                        <div className="h-7 flex flex-col items-center justify-center">
+                                                            {!isBuffer && (
+                                                                <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
+                                                                    <WeatherIcon icon={forecast.icon} />
+                                                                    <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
+                                                                </div>
+                                                            )}
+                                                            {isBuffer && <div style={{ height: '28px' }} />}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Timeline body */}
+                                    <div className="relative z-10">
+                                        {renderRightRows()}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right pane - always in layout; width 0 when closed so content is pushed, not overlayed */}
+                            <div
+                                className="flex-shrink-0 overflow-hidden bg-gray-50 border-l border-gray-200 flex flex-col"
+                                style={{
+                                    width: isRightPanelOpen ? 420 : 0,
+                                    transition: 'width 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+                                }}
+                                role="region"
+                                aria-label="Details panel"
+                            >
+                                {isRightPanelOpen && (
+                                    <>
+                                        {rightPanelView === 'chat' ? (
+                                            <ChatPanel
+                                                onClose={() => setIsRightPanelOpen(false)}
+                                                currentUserRole={persona === 'sc' ? 'sc' : 'gc'}
+                                                currentUserName={persona === 'sc' ? 'Jess Park' : 'Marcus Rivera'}
+                                                currentUserCompany={persona === 'sc' ? 'EliteMEP' : 'Turner Construction'}
+                                            />
+                                        ) : selectedDay ? (
+                                            <DailyMetricsPanel
+                                                data={{
+                                                    ...selectedDay,
+                                                    task: findTaskById(plannerTasks, selectedDay.task.id) ?? selectedDay.task,
+                                                }}
+                                                onClose={handleCloseRightPanel}
+                                                onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
+                                                onUpdateAssignedCrew={
+                                                    activeSchedule.status === ScheduleStatus.Active &&
+                                                    PROJECT_COMPANY_NAMES.some(c => selectedDay.task.contractor?.includes(c))
+                                                        ? handleUpdateAssignedCrew
+                                                        : undefined
+                                                }
+                                                onOpenAddCrew={
+                                                    activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
+                                                        ? (taskId, dateStr) => setAddCrewContext({ taskId, dateString: dateStr })
+                                                        : undefined
+                                                }
+                                                isActive={activeSchedule.status === ScheduleStatus.Active}
+                                                projectCrew={MOCK_PROJECT_CREW}
+                                                embedded
+                                            />
+                                        ) : selectedTask ? (
+                                            <LookaheadDetailsPanel
+                                                task={findTaskById(plannerTasks, selectedTask.id) ?? selectedTask}
+                                                taskDelta={activeScheduleId ? (deltas[activeScheduleId] || []).find(d => String(d.taskId) === String(selectedTask.id)) : undefined}
+                                                onClose={handleCloseRightPanel}
+                                                onAddConstraint={activeSchedule.status !== ScheduleStatus.Closed ? handleAddConstraint : undefined}
+                                                onUpdateProgress={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateProgress : undefined}
+                                                onUpdateContractor={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateContractor : undefined}
+                                                onUpdatePlannedQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdatePlannedQuantity : undefined}
+                                                onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
+                                                onOpenAddCrew={
+                                                    activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
+                                                        ? (taskId, dateString) => setAddCrewContext({ taskId, dateString })
+                                                        : undefined
+                                                }
+                                                isDraft={activeSchedule.status === ScheduleStatus.Draft}
+                                                isReadOnly={activeSchedule.status === ScheduleStatus.Closed}
+                                                scheduleStatus={activeSchedule.status}
+                                                embedded
+                                                commitment={commitmentByTaskId[selectedTask.id]}
+                                                isNetNew={netNewTaskIds.has(selectedTask.id)}
+                                                isTopLevelTask={tasksForDisplay.some(t => String(t.id) === String(selectedTask.id))}
+                                                onSetCommitment={(state) => setCommitment(selectedTask.id, state)}
+                                                persona={persona}
+                                                addProjectRisk={addProjectRisk}
+                                                onOpenCommitmentModal={() => setTaskForCommitmentModal(selectedTask)}
+                                                onGcAcceptAdjustment={(taskId, payload) => gcAcceptAdjustment(activeSchedule.id, taskId, payload)}
+                                                onGcCounterPropose={(taskId, payload) => gcCounterPropose(activeSchedule.id, taskId, payload)}
+                                                onGcMarkDisputed={(taskId, payload) => gcMarkDisputed(activeSchedule.id, taskId, payload)}
+                                            />
+                                        ) : (
+                                            /* Empty state: panel open but nothing selected */
+                                            <div className="flex flex-col h-full bg-gray-50">
+                                                <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+                                                    <h2 className="text-lg font-semibold text-gray-800">Details</h2>
+                                                    <button
+                                                        onClick={() => setIsRightPanelOpen(false)}
+                                                        className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                                        aria-label="Close panel"
+                                                    >
+                                                        <XIcon className="w-5 h-5" />
+                                                    </button>
+                                                </header>
+                                                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
+                                                    <p className="text-sm font-medium text-gray-700 mb-1">No task or day selected</p>
+                                                    <p className="text-xs">Select a task row or a day cell in the timeline to view details here.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <TaskSelectionModal
+                        isOpen={isAddTaskModalOpen}
+                        onClose={() => setIsAddTaskModalOpen(false)}
+                        onConfirm={handleAddTasks}
+                        availableTasks={MASTER_SCHEDULE_TASKS}
+                    />
+
+                    <CreateLookaheadModal
+                        isOpen={isCreateLookaheadModalOpen}
+                        onClose={() => setIsCreateLookaheadModalOpen(false)}
+                        onCreate={handleCreateLookahead}
+                        previousStartDate={previousPublishedSchedule?.publishedAt?.split('T')[0]}
+                        previousDurationDays={previousDurationDays}
+                    />
+
+                    <FieldBreakdownModal
+                        isOpen={isFieldBreakdownModalOpen}
+                        onClose={() => setIsFieldBreakdownModalOpen(false)}
+                        parentTask={taskToBreakdown}
+                        onSave={handleSaveBreakdown}
+                    />
+
+                    {addCrewContext && (
+                        <AddCrewModal
+                            isOpen={true}
+                            onClose={() => setAddCrewContext(null)}
+                            onConfirm={(crewIds) => {
+                                const taskId = addCrewContext.taskId;
+                                handleUpdateAssignedCrew(taskId, addCrewContext.dateString, crewIds);
+                                setAddCrewContext(null);
+                                // Show commitment modal so user sees "Crew added" updated (or open it if they added crew from elsewhere)
+                                if (persona === 'sc' && netNewTaskIds.has(taskId)) {
+                                    const task = findTaskById(plannerTasks, taskId);
+                                    setTaskForCommitmentModal(task ?? ({ id: taskId } as LookaheadTask));
+                                }
+                            }}
+                            availableCrew={MOCK_PROJECT_CREW}
+                            alreadyAssigned={(findTaskById(plannerTasks, addCrewContext.taskId)?.assignedCrewByDate?.[addCrewContext.dateString] ?? [])}
+                        />
+                    )}
+
+                    <CommitmentModal
+                        isOpen={!!taskForCommitmentModal}
+                        onClose={() => setTaskForCommitmentModal(null)}
+                        task={taskForCommitmentModal ? (findTaskById(plannerTasks, taskForCommitmentModal.id) ?? taskForCommitmentModal) : null}
+                        commitment={taskForCommitmentModal ? commitmentByTaskId[taskForCommitmentModal.id] : null}
+                        onSetCommitment={(state) => taskForCommitmentModal && setCommitment(taskForCommitmentModal.id, state)}
+                        addProjectRisk={addProjectRisk}
+                        onOpenAddCrew={activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0 ? (taskId, dateString) => setAddCrewContext({ taskId, dateString }) : undefined}
+                    />
+
+                    <ClashResolutionModal
+                        clash={activeClash}
+                        isOpen={!!activeClash}
+                        onClose={() => setActiveClash(null)}
+                        onSave={(updated) => {
+                            setClashes(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+                        }}
+                    />
+                </>
+            )}
         </div>
     );
 };
 
 export default LookaheadView;
+
+const SubReviewCards: React.FC<{
+    scheduleId: string;
+    scCompany: string | null;
+    tasks: LookaheadTask[];
+    onCommit: (taskId: string | number) => void;
+    onReject: (taskId: string | number, payload: { rejectionReason: string; subNotes?: string }) => void;
+    onPropose: (taskId: string | number, payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
+}> = ({ scCompany, tasks, onCommit, onReject, onPropose }) => {
+    const assigned = useMemo(() => {
+        const want = (scCompany ?? '').trim().toLowerCase();
+        return tasks.filter(t => (t.contractor ?? '').trim().toLowerCase() === want);
+    }, [tasks, scCompany]);
+
+    const respondedCount = useMemo(() => assigned.filter(t => (t.commitmentStatus ?? 'pending') !== 'pending').length, [assigned]);
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 flex items-center justify-between">
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{scCompany ?? 'Your company'} review</div>
+                    <div className="text-xs text-gray-600">You have responded to {respondedCount} of {assigned.length} tasks.</div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {assigned.map(task => (
+                    <SubTaskCard
+                        key={String(task.id)}
+                        task={task}
+                        onCommit={() => onCommit(task.id)}
+                        onReject={(payload) => onReject(task.id, payload)}
+                        onPropose={(payload) => onPropose(task.id, payload)}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const SubTaskCard: React.FC<{
+    task: LookaheadTask;
+    onCommit: () => void;
+    onReject: (payload: { rejectionReason: string; subNotes?: string }) => void;
+    onPropose: (payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
+}> = ({ task, onCommit, onReject, onPropose }) => {
+    const [mode, setMode] = useState<'none' | 'adjust' | 'reject'>(() => 'none');
+    const [start, setStart] = useState(task.startDate);
+    const [end, setEnd] = useState(task.finishDate);
+    const [crew, setCrew] = useState<number>(task.crewAssigned ?? 0);
+    const [notes, setNotes] = useState('');
+    const [reason, setReason] = useState('');
+
+    const status = task.commitmentStatus ?? 'pending';
+    const meta = commitmentMeta(status);
+    const locked = status === 'committed' || status === 'gc_accepted';
+    const reopened = status === 'gc_revised';
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate" title={task.name}>{task.name}</div>
+                        <div className="text-xs text-gray-600 mt-0.5">{task.location || '—'} · {task.taskCode}</div>
+                    </div>
+                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${meta.classes}`}>
+                        {meta.label}
+                    </span>
+                </div>
+                {reopened && (
+                    <div className="mt-2 text-xs font-medium text-purple-800 bg-purple-50 border border-purple-200 rounded-md px-2 py-1">
+                        GC has revised this task — please review.
+                    </div>
+                )}
+            </div>
+
+            <div className="px-4 py-3 text-sm">
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                    <div><span className="text-gray-500">Proposed start</span><div className="font-medium">{task.startDate}</div></div>
+                    <div><span className="text-gray-500">Proposed end</span><div className="font-medium">{task.finishDate}</div></div>
+                    <div><span className="text-gray-500">Crew</span><div className="font-medium">{task.crewAssigned ?? 0}</div></div>
+                    <div><span className="text-gray-500">Materials</span><div className="font-medium truncate" title={task.adjustmentProposal?.proposedMaterialNotes ?? ''}>{task.adjustmentProposal?.proposedMaterialNotes ? 'See notes' : '—'}</div></div>
+                </div>
+            </div>
+
+            <div className="px-4 pb-4">
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        disabled={locked}
+                        onClick={onCommit}
+                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Commit
+                    </button>
+                    <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => setMode(m => (m === 'adjust' ? 'none' : 'adjust'))}
+                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-amber-100 text-amber-900 border border-amber-200 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Propose Adjustment
+                    </button>
+                    <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => setMode(m => (m === 'reject' ? 'none' : 'reject'))}
+                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Reject
+                    </button>
+                </div>
+
+                {mode === 'adjust' && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <label className="text-xs text-amber-900">
+                                Start
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                            </label>
+                            <label className="text-xs text-amber-900">
+                                End
+                                <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                            </label>
+                        </div>
+                        <label className="text-xs text-amber-900">
+                            Crew size
+                            <input type="number" value={crew} onChange={(e) => setCrew(parseInt(e.target.value || '0', 10))} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                        </label>
+                        <label className="text-xs text-amber-900">
+                            Notes (optional)
+                            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onPropose({ proposedStartDate: start, proposedEndDate: end, proposedCrewSize: crew, subNotes: notes || undefined });
+                                setMode('none');
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                        >
+                            Submit Response
+                        </button>
+                    </div>
+                )}
+
+                {mode === 'reject' && (
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+                        <label className="text-xs text-red-900">
+                            Reason (required)
+                            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-red-200 rounded bg-white" />
+                        </label>
+                        <label className="text-xs text-red-900">
+                            Notes (optional)
+                            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-red-200 rounded bg-white" />
+                        </label>
+                        <button
+                            type="button"
+                            disabled={!reason.trim()}
+                            onClick={() => {
+                                onReject({ rejectionReason: reason.trim(), subNotes: notes || undefined });
+                                setMode('none');
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Submit Response
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};

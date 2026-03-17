@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS, TaskDelta, CommitmentState, ProjectRisk } from '../types';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS, TaskDelta, CommitmentState, ProjectRisk, ScheduleStatus, TaskAdjustmentProposal } from '../types';
 import { getEffectiveDailyMetrics, getTotalPlannedQuantity, getTotalActualQuantity, getQuantityUnit, ensureProductionQuantity, formatQuantityDisplay, getMaxActualForDay } from '../utils/quantityUtils';
 import { XIcon, PlusIcon, AlertTriangleIcon, HardHatIcon } from '../../../common/Icons';
 import ManHoursBar from './ManHoursBar';
@@ -40,6 +40,13 @@ interface LookaheadDetailsPanelProps {
   onOpenCommitmentModal?: () => void;
   /** True when this task is a root-level task (not a field breakdown child); commitment only applies to top-level */
   isTopLevelTask?: boolean;
+
+  /** Schedule status (used for In Review workflow) */
+  scheduleStatus?: ScheduleStatus;
+  /** GC in-review actions */
+  onGcAcceptAdjustment?: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
+  onGcCounterPropose?: (taskId: string | number, payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
+  onGcMarkDisputed?: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
 }
 
 const getStatusDot = (status: ConstraintStatus) => {
@@ -50,6 +57,7 @@ const getStatusDot = (status: ConstraintStatus) => {
       color = 'bg-green-500';
       break;
     case ConstraintStatus.Overdue:
+    case ConstraintStatus.Blocked:
       color = 'bg-red-500';
       break;
     case ConstraintStatus.Pending:
@@ -65,6 +73,7 @@ const getStatusClasses = (status: ConstraintStatus): { text: string; bg: string;
     case ConstraintStatus.OnSite:
       return { text: 'text-green-800', bg: 'bg-green-100' };
     case ConstraintStatus.Overdue:
+    case ConstraintStatus.Blocked:
       return { text: 'text-red-800', bg: 'bg-red-100' };
     case ConstraintStatus.Pending:
       return { text: 'text-yellow-800', bg: 'bg-yellow-100' };
@@ -135,9 +144,13 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
 };
 
 
-const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, taskDelta, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor, onUpdatePlannedQuantity, onUpdateDailyQuantity, onOpenAddCrew, isDraft = true, isReadOnly = false, embedded = false, commitment, isNetNew, isTopLevelTask = true, onSetCommitment, persona, addProjectRisk, onOpenCommitmentModal }) => {
+const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, taskDelta, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor, onUpdatePlannedQuantity, onUpdateDailyQuantity, onOpenAddCrew, isDraft = true, isReadOnly = false, embedded = false, commitment, isNetNew, isTopLevelTask = true, onSetCommitment, persona, addProjectRisk, onOpenCommitmentModal, scheduleStatus, onGcAcceptAdjustment, onGcCounterPropose, onGcMarkDisputed }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [plannedInputValue, setPlannedInputValue] = useState('');
+  const [gcNotes, setGcNotes] = useState('');
+  const [counterStart, setCounterStart] = useState('');
+  const [counterEnd, setCounterEnd] = useState('');
+  const [counterCrew, setCounterCrew] = useState<string>('');
 
   useEffect(() => {
     if (task) setIsAdding(false);
@@ -151,10 +164,22 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
       setPlannedInputValue('');
     }
   }, [task?.id]);
+
+  useEffect(() => {
+    if (!task) return;
+    setGcNotes(task.adjustmentProposal?.gcResponseNotes ?? '');
+    setCounterStart(task.adjustmentProposal?.proposedStartDate ?? task.startDate);
+    setCounterEnd(task.adjustmentProposal?.proposedEndDate ?? task.finishDate);
+    setCounterCrew(
+      task.adjustmentProposal?.proposedCrewSize != null
+        ? String(task.adjustmentProposal.proposedCrewSize)
+        : String(task.crewAssigned ?? '')
+    );
+  }, [task?.id]);
   
   const overallStatus = task ? getOverallStatusInfo(task.constraints, task.progress) : null;
   const content = task && overallStatus ? (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full bg-gray-50">
           <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
             <h2 id="lookahead-details-title" className="text-lg font-semibold text-gray-800 truncate">{task.name}</h2>
             <button onClick={onClose} className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800" aria-label="Close details">
@@ -477,6 +502,132 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
               </div>
             )}
 
+            {/* In Review thread (GC) */}
+            {persona === 'gc' && scheduleStatus === ScheduleStatus.InReview && task && isTopLevelTask && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Review thread</h3>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-amber-900">Task status</div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-amber-200 bg-white text-amber-900">
+                      {(task.commitmentStatus ?? 'pending').replace(/_/g, ' ')}
+                    </span>
+                  </div>
+
+                  {(task.adjustmentProposal?.rejectionReason || task.adjustmentProposal?.subNotes) && (
+                    <div className="text-xs text-amber-900/90 space-y-1">
+                      {task.adjustmentProposal?.rejectionReason && (
+                        <div><span className="font-semibold">Rejection reason:</span> {task.adjustmentProposal.rejectionReason}</div>
+                      )}
+                      {task.adjustmentProposal?.subNotes && (
+                        <div><span className="font-semibold">Sub notes:</span> {task.adjustmentProposal.subNotes}</div>
+                      )}
+                    </div>
+                  )}
+
+                  {(task.adjustmentProposal?.proposedStartDate || task.adjustmentProposal?.proposedEndDate || task.adjustmentProposal?.proposedCrewSize != null) && (
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <div className="text-amber-900/70 font-semibold">Proposed start</div>
+                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedStartDate ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-amber-900/70 font-semibold">Proposed end</div>
+                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedEndDate ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-amber-900/70 font-semibold">Proposed crew</div>
+                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedCrewSize ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-amber-900/70 font-semibold">Materials</div>
+                        <div className="font-medium text-amber-950 truncate" title={task.adjustmentProposal?.proposedMaterialNotes ?? ''}>{task.adjustmentProposal?.proposedMaterialNotes ?? '—'}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-xs font-semibold text-amber-900/80 mb-1">GC response notes</div>
+                    <input
+                      type="text"
+                      value={gcNotes}
+                      onChange={(e) => setGcNotes(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-amber-200 rounded-md bg-white"
+                      placeholder="Add a note to the subcontractor (optional)"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!onGcAcceptAdjustment || task.commitmentStatus !== 'adjustment_proposed'}
+                      onClick={() => onGcAcceptAdjustment?.(task.id, { gcResponseNotes: gcNotes || undefined })}
+                      className="px-3 py-2 text-xs font-bold rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Accept adjustment
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!onGcMarkDisputed}
+                      onClick={() => onGcMarkDisputed?.(task.id, { gcResponseNotes: gcNotes || undefined })}
+                      className="px-3 py-2 text-xs font-bold rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Mark disputed
+                    </button>
+                  </div>
+
+                  <div className="rounded-md border border-amber-200 bg-white p-3">
+                    <div className="text-xs font-semibold text-amber-900/80 mb-2">Counter-proposal</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs text-amber-900">
+                        Start
+                        <input type="date" value={counterStart} onChange={(e) => setCounterStart(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                      </label>
+                      <label className="text-xs text-amber-900">
+                        End
+                        <input type="date" value={counterEnd} onChange={(e) => setCounterEnd(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                      </label>
+                      <label className="text-xs text-amber-900 col-span-2">
+                        Crew size
+                        <input type="number" value={counterCrew} onChange={(e) => setCounterCrew(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!onGcCounterPropose}
+                      onClick={() => onGcCounterPropose?.(task.id, {
+                        proposedStartDate: counterStart || undefined,
+                        proposedEndDate: counterEnd || undefined,
+                        proposedCrewSize: counterCrew ? parseInt(counterCrew || '0', 10) : undefined,
+                        gcResponseNotes: gcNotes || undefined,
+                      })}
+                      className="mt-2 w-full px-3 py-2 text-xs font-bold rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Send counter-proposal
+                    </button>
+                  </div>
+
+                  {task.adjustmentProposal?.history?.length ? (
+                    <div className="pt-2 border-t border-amber-200/60">
+                      <div className="text-xs font-semibold text-amber-900/80 mb-2">History</div>
+                      <div className="space-y-2">
+                        {task.adjustmentProposal.history.slice().reverse().map((h, idx) => (
+                          <div key={idx} className="text-xs text-amber-950 flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="font-bold uppercase text-[10px]">{h.actor}</span>
+                              <span className="ml-2 font-semibold">{h.status.replace(/_/g, ' ')}</span>
+                              {h.summary && <span className="ml-2 text-amber-900/80">{h.summary}</span>}
+                            </div>
+                            <div className="text-[10px] text-amber-900/70 flex-shrink-0">{new Date(h.at).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
             {/* Constraints Section */}
             <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Constraints</h3>
@@ -523,7 +674,7 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
 
   if (embedded) return content;
   return (
-    <aside className="absolute top-0 right-0 h-full bg-white border-l border-gray-200 z-50" style={{ width: '420px' }} role="dialog" aria-modal="true" aria-labelledby="lookahead-details-title">
+    <aside className="absolute top-0 right-0 h-full bg-gray-50 border-l border-gray-200 z-50" style={{ width: '420px' }} role="dialog" aria-modal="true" aria-labelledby="lookahead-details-title">
       {content}
     </aside>
   );

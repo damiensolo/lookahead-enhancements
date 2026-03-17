@@ -13,9 +13,13 @@ interface DraggableTaskBarProps {
     offsetLeft?: number;
     /** When true, dragging and resizing are disabled (e.g. closed lookahead) */
     disabled?: boolean;
+    /** Number of buffer days before the lookahead period starts */
+    bufferDaysBefore?: number;
+    /** Number of days in the active lookahead period (excludes buffer) */
+    periodDurationDays?: number;
 }
 
-const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, projectEndDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0, disabled = false }) => {
+const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, projectEndDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0, disabled = false, bufferDaysBefore = 0, periodDurationDays = Infinity }) => {
     const [dragState, setDragState] = useState<{
         type: 'move' | 'resize-left' | 'resize-right';
         startX: number;
@@ -153,6 +157,16 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
 
     const barWidth = durationDays * dayWidth;
 
+    // Active period boundaries (the non-buffer region)
+    const activePeriodStart = useMemo(() => bufferDaysBefore > 0 ? addDays(projectStartDate, bufferDaysBefore) : null, [bufferDaysBefore, projectStartDate]);
+    const activePeriodEnd = useMemo(() => bufferDaysBefore > 0 && isFinite(periodDurationDays) ? addDays(projectStartDate, bufferDaysBefore + periodDurationDays - 1) : null, [bufferDaysBefore, periodDurationDays, projectStartDate]);
+
+    const isBufferDate = useCallback((date: Date): boolean => {
+        if (bufferDaysBefore <= 0) return false;
+        const dayIndex = getDaysDiff(projectStartDate, date);
+        return dayIndex < bufferDaysBefore || dayIndex >= bufferDaysBefore + periodDurationDays;
+    }, [bufferDaysBefore, periodDurationDays, projectStartDate]);
+
     // Planned Range Indicator (Baseline) - clamped to visible window
     const plannedIndicator = useMemo(() => {
         const pStart = planStart >= windowStart ? planStart : new Date(windowStart.getTime());
@@ -160,16 +174,33 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
         if (pStart > pEnd) return null;
         const pOffset = getDaysDiff(windowStart, pStart);
         const pDuration = getDaysDiff(pStart, pEnd) + 1;
+        const left = `${(pOffset - offsetDays) * dayWidth}px`;
+        const width = `${pDuration * dayWidth}px`;
+
+        // Active-period clip for the "full opacity" overlay
+        const activeClipStart = activePeriodStart && pStart < activePeriodStart ? activePeriodStart : pStart;
+        const activeClipEnd = activePeriodEnd && pEnd > activePeriodEnd ? activePeriodEnd : pEnd;
+        const hasActiveSegment = activePeriodStart && activeClipStart <= activeClipEnd;
+        const activeOffset = hasActiveSegment ? getDaysDiff(windowStart, activeClipStart) : 0;
+        const activeDuration = hasActiveSegment ? getDaysDiff(activeClipStart, activeClipEnd) + 1 : 0;
+
         return (
-            <div 
-                className="absolute -top-[3px] h-[2px] bg-zinc-200 rounded-full overflow-hidden"
-                style={{
-                    left: `${(pOffset - offsetDays) * dayWidth}px`,
-                    width: `${pDuration * dayWidth}px`,
-                }}
-            />
+            <div className="absolute -top-[3px] h-[2px]" style={{ left, width }}>
+                {/* Full span at low opacity (buffer zones appear disabled) */}
+                <div className="absolute inset-0 bg-zinc-200 rounded-full opacity-30" />
+                {/* Active-period portion at full opacity */}
+                {hasActiveSegment && activeDuration > 0 && (
+                    <div
+                        className="absolute top-0 h-full bg-zinc-200 rounded-full"
+                        style={{
+                            left: `${(activeOffset - pOffset) * dayWidth}px`,
+                            width: `${activeDuration * dayWidth}px`,
+                        }}
+                    />
+                )}
+            </div>
         );
-    }, [planStart, planEnd, windowStart, windowEnd, offsetDays, dayWidth]);
+    }, [planStart, planEnd, windowStart, windowEnd, offsetDays, dayWidth, activePeriodStart, activePeriodEnd]);
 
     // Master Range Indicator - clamped to visible window
     const masterIndicator = useMemo(() => {
@@ -181,18 +212,40 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
         const mEndClamp = mFinish <= windowEnd ? mFinish : new Date(windowEnd.getTime());
         const mOffset = getDaysDiff(windowStart, mStartClamp);
         const mDuration = getDaysDiff(mStartClamp, mEndClamp) + 1;
+        const left = `${(mOffset - offsetDays) * dayWidth}px`;
+        const width = `${mDuration * dayWidth}px`;
+
+        // Active-period clip for the "full opacity" overlay
+        const activeClipStart = activePeriodStart && mStartClamp < activePeriodStart ? activePeriodStart : mStartClamp;
+        const activeClipEnd = activePeriodEnd && mEndClamp > activePeriodEnd ? activePeriodEnd : mEndClamp;
+        const hasActiveSegment = activePeriodStart && activeClipStart <= activeClipEnd;
+        const activeOffset = hasActiveSegment ? getDaysDiff(windowStart, activeClipStart) : 0;
+        const activeDuration = hasActiveSegment ? getDaysDiff(activeClipStart, activeClipEnd) + 1 : 0;
+
         return (
-            <div 
-                className="absolute -top-[8px] h-1 bg-amber-400/40 rounded-full overflow-hidden border border-amber-500/10"
-                style={{
-                    left: `${(mOffset - offsetDays) * dayWidth}px`,
-                    width: `${mDuration * dayWidth}px`,
-                }}
+            <div
+                className="absolute -top-[8px] h-1 rounded-full overflow-hidden border border-amber-500/10"
+                style={{ left, width }}
             >
-                <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.6)_4px,rgba(245,158,11,0.6)_8px)]" />
+                {/* Full span at low opacity (buffer zones appear disabled) */}
+                <div className="absolute inset-0 bg-amber-400/15">
+                    <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.2)_4px,rgba(245,158,11,0.2)_8px)]" />
+                </div>
+                {/* Active-period portion at full opacity */}
+                {hasActiveSegment && activeDuration > 0 && (
+                    <div
+                        className="absolute top-0 h-full bg-amber-400/40"
+                        style={{
+                            left: `${(activeOffset - mOffset) * dayWidth}px`,
+                            width: `${activeDuration * dayWidth}px`,
+                        }}
+                    >
+                        <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.6)_4px,rgba(245,158,11,0.6)_8px)]" />
+                    </div>
+                )}
             </div>
         );
-    }, [hasMasterRange, task.masterStartDate, task.masterFinishDate, windowStart, windowEnd, offsetDays, dayWidth]);
+    }, [hasMasterRange, task.masterStartDate, task.masterFinishDate, windowStart, windowEnd, offsetDays, dayWidth, activePeriodStart, activePeriodEnd]);
 
     if (isOutsideWindow) return null;
 
@@ -215,28 +268,35 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 {Array.from({ length: durationDays }).map((_, i) => {
                     const dayDate = addDays(visibleStart, i);
                     const dayProgress = Math.min(100, Math.max(0, (task.progress - (i / durationDays * 100)) * durationDays));
-                    
+                    const inBuffer = isBufferDate(dayDate);
+
                     return (
-                        <div 
+                        <div
                             key={i}
                             className="h-full flex items-center justify-center"
                             style={{ width: `${dayWidth}px` }}
                         >
-                            <div 
-                                className={`aspect-square w-[65%] border ${styles.bar} shadow-sm relative flex items-center overflow-hidden cursor-pointer hover:brightness-95 transition-all rounded-sm`}
-                                onClick={(e) => {
+                            <div
+                                className={`aspect-square w-[65%] border relative flex items-center overflow-hidden transition-all rounded-sm
+                                    ${inBuffer
+                                        ? 'bg-gray-100 border-gray-200 opacity-40 cursor-not-allowed pointer-events-none'
+                                        : `${styles.bar} shadow-sm cursor-pointer hover:brightness-95`
+                                    }`}
+                                onClick={inBuffer ? undefined : (e) => {
                                     e.stopPropagation();
                                     onDayClick(task, dayDate);
                                 }}
                             >
                                 {/* Day Progress Fill */}
-                                <div 
-                                    className={`h-full ${styles.progress} transition-all duration-300`}
-                                    style={{ width: `${dayProgress}%` }}
-                                />
-                                
+                                {!inBuffer && (
+                                    <div
+                                        className={`h-full ${styles.progress} transition-all duration-300`}
+                                        style={{ width: `${dayProgress}%` }}
+                                    />
+                                )}
+
                                 {/* Drag Handle Indicator (only on first square) */}
-                                {isFieldTask && !disabled && i === 0 && (
+                                {isFieldTask && !disabled && !inBuffer && i === 0 && (
                                     <div className="absolute left-0.5 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
                                         <div className="w-1.5 h-0.5 bg-current rounded-full" />
                                         <div className="w-1.5 h-0.5 bg-current rounded-full" />
