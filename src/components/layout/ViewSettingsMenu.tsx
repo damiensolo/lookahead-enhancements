@@ -104,7 +104,13 @@ const ViewSettingsMenu: React.FC = () => {
     <div className="relative">
       <button
         ref={triggerRef}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setCoords({ top: rect.bottom + 8, left: rect.right - 280 });
+          }
+          setIsOpen(!isOpen);
+        }}
         className={`p-1.5 rounded-md transition-colors ${
           isOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
         }`}
@@ -128,22 +134,36 @@ const ViewSettingsMenu: React.FC = () => {
             <div className="mb-4">
               <div className="px-2 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-tight">Columns</div>
               <div className="space-y-0.5">
-                {activeView.columns.map(column => (
-                  <button
-                    key={column.id}
-                    onClick={() => toggleColumn(column.id)}
-                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors group"
-                  >
-                    <span className={`text-sm ${column.visible ? 'text-gray-700' : 'text-gray-400'}`}>
-                      {column.label}
-                    </span>
-                    {column.visible ? (
-                      <EyeIcon className="w-4 h-4 text-blue-500" />
-                    ) : (
-                      <EyeOffIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-400" />
-                    )}
-                  </button>
-                ))}
+                {activeView.columns.map(column => {
+                  const isHideable = column.hideable !== false;
+                  if (!isHideable) {
+                    return (
+                      <div
+                        key={column.id}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-gray-500 cursor-default"
+                      >
+                        <span className="text-sm">{column.label}</span>
+                        <span className="text-[10px] text-gray-400">Always visible</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={column.id}
+                      onClick={() => toggleColumn(column.id)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors group"
+                    >
+                      <span className={`text-sm ${column.visible ? 'text-gray-700' : 'text-gray-400'}`}>
+                        {column.label}
+                      </span>
+                      {column.visible ? (
+                        <EyeIcon className="w-4 h-4 text-blue-500" />
+                      ) : (
+                        <EyeOffIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-400" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

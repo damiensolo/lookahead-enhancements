@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useProject } from '../../context/ProjectContext';
+import { usePersona } from '../../context/PersonaContext';
 import { PlusIcon, CalculatorIcon, HistoryIcon, CalendarIcon, ChevronDownIcon } from '../common/Icons';
 import { ScheduleStatus, LookaheadTask } from '../views/lookahead/types';
 import { parseLookaheadDate } from '../../lib/dateUtils';
@@ -12,8 +13,10 @@ const formatValue = (val: number) =>
 const AppHeader: React.FC = () => {
     const { 
         activeViewMode, activeView, setIsCreateLookaheadModalOpen, setIsAddTaskModalOpen,
-        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, deltas
+        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, deltas, projectRisks
     } = useProject();
+    const { persona, scCompany } = usePersona();
+    const [showRisks, setShowRisks] = useState(false);
 
     const [isDeltasModalOpen, setIsDeltasModalOpen] = useState(false);
     const [currentDeltas, setCurrentDeltas] = useState<any[]>([]);
@@ -102,7 +105,7 @@ const AppHeader: React.FC = () => {
 
     return (
         <header className="flex-shrink-0 border-b border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center justify-between px-4 py-3 relative">
                 <div className="flex items-center gap-6">
                     {activeViewMode !== 'lookahead' && (
                         <h1 className="text-xl font-bold text-gray-900">{title}</h1>
@@ -137,6 +140,8 @@ const AppHeader: React.FC = () => {
                                                 <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${
                                                     s.status === ScheduleStatus.Draft 
                                                         ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                                                        : s.status === ScheduleStatus.Closed
+                                                        ? 'bg-gray-100 text-gray-600 border-gray-200'
                                                         : 'bg-green-50 text-green-600 border-green-100'
                                                 }`}>
                                                     {s.status}
@@ -152,11 +157,13 @@ const AppHeader: React.FC = () => {
                                 <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
                                     activeSchedule.status === ScheduleStatus.Draft 
                                         ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                                        : activeSchedule.status === ScheduleStatus.Closed
+                                        ? 'bg-gray-100 text-gray-600 border border-gray-300'
                                         : 'bg-green-100 text-green-700 border border-green-200'
                                 }`}>
                                     {activeSchedule.status}
                                 </span>
-                                {activeSchedule.status === ScheduleStatus.Draft && (
+                                {activeSchedule.status === ScheduleStatus.Draft && persona === 'gc' && (
                                     <button 
                                         onClick={handlePublishClick}
                                         className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-md hover:bg-blue-700 shadow-sm transition-all flex items-center gap-2"
@@ -176,6 +183,28 @@ const AppHeader: React.FC = () => {
                                         <HistoryIcon className="w-3.5 h-3.5" />
                                         View Deltas
                                     </button>
+                                )}
+                                {projectRisks.length > 0 && (
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowRisks(prev => !prev)}
+                                            className="px-4 py-1.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-md hover:bg-amber-200 border border-amber-200 transition-all flex items-center gap-2"
+                                        >
+                                            Risks ({projectRisks.length})
+                                        </button>
+                                        {showRisks && (
+                                            <div className="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-2 max-h-60 overflow-y-auto">
+                                                <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">Project risks</div>
+                                                {projectRisks.map((r, i) => (
+                                                    <div key={i} className="px-3 py-2 text-sm border-b border-gray-50 last:border-0">
+                                                        <div className="font-medium text-gray-800 truncate" title={r.taskName}>{r.taskName}</div>
+                                                        <div className="text-xs text-amber-700">{r.reason}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -211,6 +240,14 @@ const AppHeader: React.FC = () => {
                         </div>
                     )}
                 </div>
+
+                {activeViewMode === 'lookahead' && (
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                        <span className="text-xs font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 bg-gray-50">
+                            {persona === 'gc' ? 'General Contractor view' : `Subcontractor view – ${scCompany ?? 'Select company'}`}
+                        </span>
+                    </div>
+                )}
                 
                 <div className="flex items-center gap-2">
                     {isSpreadsheetView && (
@@ -227,22 +264,21 @@ const AppHeader: React.FC = () => {
                         </button>
                     )}
 
-                    {activeViewMode === 'lookahead' ? (
-                        <div className="flex items-center gap-2">
-                            <button 
-                                onClick={() => setIsCreateLookaheadModalOpen(true)}
-                                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-zinc-800 rounded-md hover:bg-zinc-700 shadow-sm transition-colors"
-                            >
-                                <PlusIcon className="w-4 h-4" />
-                                <span>Create Lookahead</span>
-                            </button>
-                        </div>
-                    ) : showCreateButton && (
+                    {activeViewMode === 'lookahead' && persona === 'gc' && (
+                        <button 
+                            onClick={() => setIsCreateLookaheadModalOpen(true)}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-zinc-800 rounded-md hover:bg-zinc-700 shadow-sm transition-colors"
+                        >
+                            <PlusIcon className="w-4 h-4" />
+                            <span>Create Lookahead</span>
+                        </button>
+                    )}
+                    {activeViewMode !== 'lookahead' && showCreateButton ? (
                         <button className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-zinc-800 rounded-md hover:bg-zinc-700 shadow-sm transition-colors">
                             <PlusIcon className="w-4 h-4" />
                             <span>Create</span>
                         </button>
-                    )}
+                    ) : null}
                 </div>
             </div>
             <DeltasModal

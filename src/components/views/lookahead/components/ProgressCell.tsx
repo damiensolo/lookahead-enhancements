@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import ProgressSlider from './ProgressSlider';
 
 interface ProgressCellProps {
     progress: number;
@@ -34,8 +35,6 @@ const ProgressCell: React.FC<ProgressCellProps> = ({ progress, isEditable, onCha
         }
     }, [isOpen]);
 
-    const presets = [0, 25, 50, 75, 100];
-
     return (
         <div ref={containerRef} className={`relative w-full flex items-center gap-2 group/progress ${isOpen ? 'z-[100]' : ''}`}>
             {/* Progress Bar */}
@@ -53,6 +52,13 @@ const ProgressCell: React.FC<ProgressCellProps> = ({ progress, isEditable, onCha
                 onClick={(e) => {
                     if (isEditable) {
                         e.stopPropagation();
+                        if (!isOpen && containerRef.current) {
+                            const rect = containerRef.current.getBoundingClientRect();
+                            setPopoverPos({
+                                top: rect.bottom + window.scrollY,
+                                left: rect.right - 192 + window.scrollX
+                            });
+                        }
                         setIsOpen(!isOpen);
                     }
                 }}
@@ -92,50 +98,7 @@ const ProgressCell: React.FC<ProgressCellProps> = ({ progress, isEditable, onCha
                                 <span className="text-sm font-bold text-blue-600">{progress}%</span>
                             </div>
 
-                            {/* Slider */}
-                            <input 
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={progress}
-                                onChange={(e) => onChange(parseInt(e.target.value))}
-                                className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                            />
-
-                            {/* Presets */}
-                            <div className="grid grid-cols-5 gap-1">
-                                {presets.map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => onChange(p)}
-                                        className={`
-                                            h-7 rounded text-[10px] font-bold transition-all
-                                            ${progress === p 
-                                                ? 'bg-blue-600 text-white shadow-md' 
-                                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                                            }
-                                        `}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Quick Increment/Decrement */}
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => onChange(Math.max(0, progress - 5))}
-                                    className="flex-1 flex items-center justify-center gap-1 h-8 bg-gray-50 hover:bg-gray-100 rounded-lg text-[10px] font-bold text-gray-600"
-                                >
-                                    -5%
-                                </button>
-                                <button 
-                                    onClick={() => onChange(Math.min(100, progress + 5))}
-                                    className="flex-1 flex items-center justify-center gap-1 h-8 bg-gray-50 hover:bg-gray-100 rounded-lg text-[10px] font-bold text-gray-600"
-                                >
-                                    +5%
-                                </button>
-                            </div>
+                            <ProgressSlider value={progress} onChange={onChange} size="md" />
                         </div>
                     </motion.div>
                 </AnimatePresence>,

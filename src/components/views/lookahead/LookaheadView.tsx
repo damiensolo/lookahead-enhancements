@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS } from './types';
-import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS } from './constants';
+import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS, MOCK_PROJECT_CREW, PROJECT_COMPANY_NAMES } from './constants';
 import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
-import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon } from '../../common/Icons';
+import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon, HardHatIcon, HandshakeIcon, AlertTriangleIcon, OctagonXIcon, PanelLeftIcon, PanelRightIcon, XIcon } from '../../common/Icons';
 import ConstraintBadge from './components/ConstraintBadge';
 import ManHoursBar from './components/ManHoursBar';
 import DraggableTaskBar from './components/DraggableTaskBar';
@@ -12,14 +12,21 @@ import DailyMetricsPanel from './components/DailyMetricsPanel';
 import { TaskSelectionModal } from './components/TaskSelectionModal';
 import { CreateLookaheadModal } from './components/CreateLookaheadModal';
 import { FieldBreakdownModal } from './components/FieldBreakdownModal';
+import { AddCrewModal } from './components/AddCrewModal';
 import { DeltasModal } from './components/DeltasModal';
+import { CommitmentModal } from './components/CommitmentModal';
+import { ClashResolutionModal } from './components/ClashResolutionModal';
 import ProgressCell from './components/ProgressCell';
 import ContractorSelect from './components/ContractorSelect';
 import { compareLookaheadTasks } from './utils/diffUtils';
+import { detectLocationClashes, LocationClash } from './utils/clashUtils';
+import { getTotalPlannedQuantity, getTotalActualQuantity, getQuantityUnit, distributePlannedQuantityUniformly, ensureDailyPlanWithinTotal, ensureProductionQuantity, hasAnyActualQuantity, formatQuantityDisplay, getMaxActualForDay } from './utils/quantityUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../common/ui/Tooltip';
 import { useProject } from '../../../context/ProjectContext';
+import { usePersona } from '../../../context/PersonaContext';
 import { DisplayDensity } from '../../../types';
 import ViewControls from '../../layout/ViewControls';
+import ViewSettingsMenu from '../../layout/ViewSettingsMenu';
 
 const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => {
     switch (icon) {
@@ -31,6 +38,8 @@ const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => 
 };
 
 const DAY_WIDTH = 32;
+const LOOKAHEAD_BUFFER_DAYS = 2;
+const MAX_TIMELINE_DAYS_WITHOUT_PERIOD = 84; // Cap when schedule has no period to avoid excessive scroll
 
 const getRowHeight = (density: DisplayDensity) => {
   switch (density) {
@@ -42,13 +51,19 @@ const getRowHeight = (density: DisplayDensity) => {
 };
 
 // Mapping from Generic Column ID to Lookahead specific logic
-type LookaheadColumnType = 'sNo' | 'name' | 'status' | 'taskType' | 'progress' | 'planStart' | 'planEnd' | 'contractor' | 'crewAssigned' | 'location' | 'shared';
+type LookaheadColumnType = 'sNo' | 'outline' | 'name' | 'commitment' | 'actions' | 'status' | 'taskType' | 'quantity' | 'progress' | 'planStart' | 'planEnd' | 'contractor' | 'crewAssigned' | 'location' | 'shared';
+
+const STICKY_COLUMN_TYPES: LookaheadColumnType[] = ['sNo', 'outline', 'name'];
 
 const COLUMN_MAPPING: Record<string, LookaheadColumnType> = {
     sNo: 'sNo',
+    outline: 'outline',
     name: 'name',
+    commitment: 'commitment',
+    actions: 'actions',
     status: 'status',
     taskType: 'taskType',
+    quantity: 'quantity',
     progress: 'progress',
     planStart: 'planStart',
     planEnd: 'planEnd',
@@ -91,12 +106,31 @@ const RowNumberCheckbox = ({
     );
 };
 
+const normalizeCompany = (s: string) => (s || '').trim().toLowerCase();
+
+/** Filter task tree to only tasks for the given contractor (include parent if any child matches). */
+function filterTasksByContractor(tasks: LookaheadTask[], scCompany: string): LookaheadTask[] {
+    const want = normalizeCompany(scCompany);
+    if (!want) return tasks;
+    const out: LookaheadTask[] = [];
+    for (const task of tasks) {
+        const filteredChildren = task.children ? filterTasksByContractor(task.children, scCompany) : undefined;
+        const selfMatch = normalizeCompany(task.contractor) === want;
+        if (selfMatch || (filteredChildren && filteredChildren.length > 0)) {
+            out.push({ ...task, children: filteredChildren?.length ? filteredChildren : undefined });
+        }
+    }
+    return out;
+}
+
 const LookaheadView: React.FC = () => {
     const { 
         activeView, setColumns, createDraft, schedules, activeScheduleId, updateScheduleTasks, publishSchedule, deltas,
         isCreateLookaheadModalOpen, setIsCreateLookaheadModalOpen,
-        isAddTaskModalOpen, setIsAddTaskModalOpen
+        isAddTaskModalOpen, setIsAddTaskModalOpen,
+        commitmentByTaskId, setCommitment, addProjectRisk
     } = useProject();
+    const { persona, scCompany } = usePersona();
     const { columns, displayDensity, fontSize } = activeView;
 
     const activeSchedule = useMemo(() => 
@@ -110,7 +144,11 @@ const LookaheadView: React.FC = () => {
     , [schedules]);
 
     const previousDurationDays = useMemo(() => {
-        if (!previousPublishedSchedule || previousPublishedSchedule.tasks.length === 0) return 14;
+        if (!previousPublishedSchedule) return 42; // 6 weeks default for first-loaded lookahead
+        if (previousPublishedSchedule.periodDurationDays != null && previousPublishedSchedule.periodDurationDays > 0) {
+            return previousPublishedSchedule.periodDurationDays;
+        }
+        if (previousPublishedSchedule.tasks.length === 0) return 42;
         const allTasks: LookaheadTask[] = [];
         const flatten = (tasks: LookaheadTask[]) => {
             tasks.forEach(t => {
@@ -125,11 +163,47 @@ const LookaheadView: React.FC = () => {
     }, [previousPublishedSchedule]);
 
     const [plannerTasks, setPlannerTasks] = useState<LookaheadTask[]>(activeSchedule.tasks);
+    const [clashes, setClashes] = useState<LocationClash[]>([]);
+    const [activeClash, setActiveClash] = useState<LocationClash | null>(null);
+
+    useEffect(() => {
+        setClashes(detectLocationClashes(plannerTasks));
+    }, [plannerTasks]);
+
+    const clashesByTaskId = useMemo(() => {
+        const map = new Map<string | number, LocationClash[]>();
+        clashes.forEach(c => {
+            c.taskIds.forEach(id => {
+                const existing = map.get(id) ?? [];
+                existing.push(c);
+                map.set(id, existing);
+            });
+        });
+        return map;
+    }, [clashes]);
+
+    /** For SC view, show only tasks for scCompany; for GC show all. */
+    const tasksForDisplay = useMemo(() => {
+        if (persona !== 'sc' || !scCompany) return plannerTasks;
+        return filterTasksByContractor(plannerTasks, scCompany);
+    }, [persona, scCompany, plannerTasks]);
+
     const [selectedRowIds, setSelectedRowIds] = useState<Set<string | number>>(new Set());
     const [selectedTask, setSelectedTask] = useState<LookaheadTask | null>(null);
     const [selectedDay, setSelectedDay] = useState<{ task: LookaheadTask; date: Date; forecast?: WeatherForecast } | null>(null);
     const [isFieldBreakdownModalOpen, setIsFieldBreakdownModalOpen] = useState(false);
     const [taskToBreakdown, setTaskToBreakdown] = useState<LookaheadTask | null>(null);
+    const [addCrewContext, setAddCrewContext] = useState<{ taskId: string | number; dateString: string } | null>(null);
+    const [taskForCommitmentModal, setTaskForCommitmentModal] = useState<LookaheadTask | null>(null);
+    const [isPanelClosing, setIsPanelClosing] = useState(false);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+
+    const handleCloseRightPanel = useCallback(() => {
+        setSelectedDay(null);
+        setSelectedTask(null);
+        setIsRightPanelOpen(false); // Close the panel
+    }, []);
     
     const allTaskIds = useMemo(() => {
         const ids: (string | number)[] = [];
@@ -139,9 +213,55 @@ const LookaheadView: React.FC = () => {
                 if (t.children) flatten(t.children);
             });
         };
-        flatten(plannerTasks);
+        flatten(tasksForDisplay);
         return ids;
-    }, [plannerTasks]);
+    }, [tasksForDisplay]);
+
+    /** Flattened visible rows (respects isExpanded) for consistent row order and row numbers */
+    const flattenedTaskRows = useMemo(() => {
+        const rows: { task: LookaheadTask; level: number }[] = [];
+        const walk = (tasks: LookaheadTask[], level: number) => {
+            tasks.forEach(t => {
+                rows.push({ task: t, level });
+                if (t.isExpanded && t.children?.length) walk(t.children, level + 1);
+            });
+        };
+        walk(tasksForDisplay, 0);
+        return rows;
+    }, [tasksForDisplay]);
+
+    const findTaskById = useCallback((tasks: LookaheadTask[], id: string | number): LookaheadTask | null => {
+        for (const t of tasks) {
+            if (String(t.id) === String(id)) return t;
+            if (t.children) {
+                const found = findTaskById(t.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    }, []);
+
+    /** For SC: top-level task IDs that are net-new (added by GC, belong to scCompany). Only root-level tasks require commitment; field breakdown children are created by SC. */
+    const netNewTaskIds = useMemo(() => {
+        if (persona !== 'sc' || !scCompany || !activeScheduleId) return new Set<string | number>();
+        const scheduleDeltas = deltas[activeScheduleId] || [];
+        const want = normalizeCompany(scCompany);
+        const added = new Set<string | number>();
+        const isRootTask = (taskId: string | number) => plannerTasks.some(t => String(t.id) === String(taskId));
+        if (scheduleDeltas.length > 0) {
+            scheduleDeltas.forEach(d => {
+                if (d.type !== 'added') return;
+                const task = findTaskById(plannerTasks, d.taskId);
+                if (task && normalizeCompany(task.contractor) === want && isRootTask(d.taskId)) added.add(d.taskId);
+            });
+        } else {
+            // No deltas (e.g. initial schedule): treat root-level SC tasks as net-new for commitment demo
+            tasksForDisplay.forEach(t => {
+                if (normalizeCompany(t.contractor) === want) added.add(t.id);
+            });
+        }
+        return added;
+    }, [persona, scCompany, activeScheduleId, deltas, plannerTasks, findTaskById, tasksForDisplay]);
 
     const toggleRowSelection = (id: string | number) => {
         setSelectedRowIds(prev => {
@@ -173,44 +293,123 @@ const LookaheadView: React.FC = () => {
     }, [plannerTasks, activeScheduleId, updateScheduleTasks]);
 
     const [isScrolled, setIsScrolled] = useState(false);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    /** Left panel viewport width; 0 = auto (fit columns) */
+    const [leftPanelViewportWidth, setLeftPanelViewportWidth] = useState(0);
+    const leftScrollRef = useRef<HTMLDivElement>(null);
+    const rightScrollRef = useRef<HTMLDivElement>(null);
+    const plannerContainerRef = useRef<HTMLDivElement>(null);
+    const scrollSyncRef = useRef(false);
+    
+    const syncVerticalScroll = useCallback((source: 'left' | 'right') => {
+        if (scrollSyncRef.current) return;
+        scrollSyncRef.current = true;
+        const left = leftScrollRef.current;
+        const right = rightScrollRef.current;
+        if (source === 'left' && left && right) {
+            right.scrollTop = left.scrollTop;
+        } else if (source === 'right' && left && right) {
+            left.scrollTop = right.scrollTop;
+        }
+        scrollSyncRef.current = false;
+    }, []);
     
     useEffect(() => {
-        const container = scrollContainerRef.current;
+        const left = leftScrollRef.current;
         const handleScroll = () => {
-            if (container) {
-                setIsScrolled(container.scrollLeft > 0);
+            if (left) {
+                setIsScrolled(left.scrollLeft > 0);
             }
         };
-        container?.addEventListener('scroll', handleScroll);
+        left?.addEventListener('scroll', handleScroll);
         handleScroll();
-        return () => container?.removeEventListener('scroll', handleScroll);
+        return () => left?.removeEventListener('scroll', handleScroll);
     }, []);
 
     const visiblePanelColumns = useMemo(() => {
-        return columns
-            .filter(col => col.visible && COLUMN_MAPPING[col.id])
+        const filtered = columns
+            .filter(col => col.visible && COLUMN_MAPPING[col.id] && !(col.id === 'actions' && activeSchedule?.status === ScheduleStatus.Closed) && !(col.id === 'commitment' && persona !== 'sc') && !(col.id === 'contractor' && persona === 'sc'))
             .map(col => ({
                 ...col,
                 lookaheadType: COLUMN_MAPPING[col.id]!,
                 widthPx: parseInt(col.width || '100', 10) || 100
             }));
-    }, [columns]);
+
+        // Compute natural left offsets based on full column order
+        let leftOffset = 0;
+        const withOffsets = filtered.map(col => {
+            const colWithOffset = { ...col, leftOffset };
+            leftOffset += col.widthPx;
+            return colWithOffset;
+        });
+
+        // Determine which columns are actually sticky based on current order:
+        // - Always make the first S.No column sticky.
+        // - Any subsequent columns that are in STICKY_COLUMN_TYPES *and*
+        //   appear contiguously after the last sticky column also become sticky.
+        // - Once a non-sticky column appears, all following columns are non-sticky.
+        let hasStartedSticky = false;
+        let encounteredNonStickyAfterPrefix = false;
+        let stickyLeft = 0;
+
+        return withOffsets.map(col => {
+            let isSticky = false;
+
+            if (!encounteredNonStickyAfterPrefix && STICKY_COLUMN_TYPES.includes(col.lookaheadType)) {
+                // This column is eligible to be sticky and is still in the leading prefix.
+                isSticky = true;
+                hasStartedSticky = true;
+            } else if (hasStartedSticky) {
+                // We have started the sticky prefix but this column is not eligible,
+                // so mark that the sticky prefix has ended.
+                encounteredNonStickyAfterPrefix = true;
+            }
+
+            const stickyLeftOffset = isSticky ? stickyLeft : undefined;
+            if (isSticky) {
+                stickyLeft += col.widthPx;
+            }
+
+            return {
+                ...col,
+                stickyLeftOffset,
+                isSticky,
+            };
+        });
+    }, [columns, activeSchedule?.status, persona]);
 
     const totalLeftPanelWidth = useMemo(() => visiblePanelColumns.reduce((sum, col) => sum + col.widthPx, 0), [visiblePanelColumns]);
+    /** Width of columns through End (inclusive) so split can default to just after End and show more days */
+    const widthThroughEndColumn = useMemo(() => {
+        let sum = 0;
+        for (const col of visiblePanelColumns) {
+            sum += col.widthPx;
+            if (col.lookaheadType === 'planEnd') break;
+        }
+        return sum;
+    }, [visiblePanelColumns]);
     const rowHeight = getRowHeight(displayDensity);
-
-    const handleMouseDown = useCallback((e: React.MouseEvent, columnId: string, currentWidth: number) => {
+    const SPLIT_GRABBER_WIDTH = 4;
+    const SPLIT_HIT_WIDTH = 12;
+    const MIN_COL_WIDTH = 40;
+    const MIN_TIMELINE_WIDTH = 200;
+    const handleMouseDown = useCallback((e: React.MouseEvent, columnId: string, currentWidth: number, isLastCol?: boolean) => {
         e.preventDefault();
 
         const startX = e.clientX;
+        const otherColsSum = isLastCol ? totalLeftPanelWidth - currentWidth : 0;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
 
         const moveHandler = (moveEvent: MouseEvent) => {
             const deltaX = moveEvent.clientX - startX;
-            const newWidth = Math.max(currentWidth + deltaX, 40);
-             setColumns(prev => prev.map(c => c.id === columnId ? { ...c, width: `${newWidth}px` } : c));
+            let newWidth = Math.max(currentWidth + deltaX, MIN_COL_WIDTH);
+            if (isLastCol) {
+                const container = plannerContainerRef.current;
+                const maxLeftPanel = container ? container.clientWidth - SPLIT_HIT_WIDTH - MIN_TIMELINE_WIDTH : Infinity;
+                const maxLastCol = Math.max(MIN_COL_WIDTH, maxLeftPanel - otherColsSum);
+                newWidth = Math.min(newWidth, maxLastCol);
+            }
+            setColumns(prev => prev.map(c => c.id === columnId ? { ...c, width: `${newWidth}px` } : c));
         };
 
         const upHandler = () => {
@@ -222,10 +421,55 @@ const LookaheadView: React.FC = () => {
 
         window.addEventListener('mousemove', moveHandler);
         window.addEventListener('mouseup', upHandler);
-    }, [setColumns]);
+    }, [setColumns, totalLeftPanelWidth, SPLIT_HIT_WIDTH]);
+
+    const MIN_LEFT_VIEWPORT = 80;
+    const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const currentWidth = leftPanelViewportWidth > 0 ? leftPanelViewportWidth : widthThroughEndColumn;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const moveHandler = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const raw = currentWidth + deltaX;
+            const container = plannerContainerRef.current;
+            const maxWidth = container
+                ? container.clientWidth - SPLIT_HIT_WIDTH - MIN_TIMELINE_WIDTH
+                : totalLeftPanelWidth;
+            const clamped = Math.max(MIN_LEFT_VIEWPORT, Math.min(raw, Math.max(maxWidth, totalLeftPanelWidth)));
+            setLeftPanelViewportWidth(clamped);
+        };
+
+        const upHandler = () => {
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', moveHandler);
+            window.removeEventListener('mouseup', upHandler);
+        };
+
+        window.addEventListener('mousemove', moveHandler);
+        window.addEventListener('mouseup', upHandler);
+    }, [leftPanelViewportWidth, widthThroughEndColumn, totalLeftPanelWidth, SPLIT_HIT_WIDTH]);
 
 
-    const { projectStartDate, projectEndDate, totalDays } = useMemo(() => {
+    const { projectStartDate, projectEndDate, totalDays, bufferDaysBefore, periodDurationDays } = useMemo(() => {
+        const periodStartStr = activeSchedule?.periodStartDate;
+        const periodDuration = activeSchedule?.periodDurationDays;
+        if (periodStartStr && periodDuration != null && periodDuration > 0) {
+            const periodStart = parseLookaheadDate(periodStartStr);
+            const periodEnd = addDays(periodStart, periodDuration - 1);
+            const viewStart = addDays(periodStart, -LOOKAHEAD_BUFFER_DAYS);
+            const viewEnd = addDays(periodEnd, LOOKAHEAD_BUFFER_DAYS);
+            return {
+                projectStartDate: viewStart,
+                projectEndDate: viewEnd,
+                totalDays: LOOKAHEAD_BUFFER_DAYS + periodDuration + LOOKAHEAD_BUFFER_DAYS,
+                bufferDaysBefore: LOOKAHEAD_BUFFER_DAYS,
+                periodDurationDays: periodDuration,
+            };
+        }
         const allTasks: LookaheadTask[] = [];
         const flatten = (tasks: LookaheadTask[]) => {
             tasks.forEach(t => {
@@ -233,18 +477,24 @@ const LookaheadView: React.FC = () => {
                 if (t.children) flatten(t.children);
             });
         };
-        flatten(plannerTasks);
-        if (allTasks.length === 0) return { projectStartDate: new Date(), projectEndDate: new Date(), totalDays: 0 };
+        flatten(tasksForDisplay);
+        if (allTasks.length === 0) return { projectStartDate: new Date(), projectEndDate: new Date(), totalDays: 0, bufferDaysBefore: 0, periodDurationDays: 0 };
 
         const start = allTasks.reduce((min, t) => parseLookaheadDate(t.startDate) < min ? parseLookaheadDate(t.startDate) : min, parseLookaheadDate(allTasks[0].startDate));
-        const end = allTasks.reduce((max, t) => parseLookaheadDate(t.finishDate) > max ? parseLookaheadDate(t.finishDate) : max, parseLookaheadDate(allTasks[0].finishDate));
-        
+        const rawEnd = allTasks.reduce((max, t) => parseLookaheadDate(t.finishDate) > max ? parseLookaheadDate(t.finishDate) : max, parseLookaheadDate(allTasks[0].finishDate));
+        const cappedDays = Math.min(getDaysDiff(start, rawEnd) + 1, MAX_TIMELINE_DAYS_WITHOUT_PERIOD);
+        const end = addDays(start, cappedDays - 1);
+
         return {
             projectStartDate: start,
             projectEndDate: end,
-            totalDays: getDaysDiff(start, end) + 1,
+            totalDays: cappedDays,
+            bufferDaysBefore: 0,
+            periodDurationDays: cappedDays,
         };
-    }, [plannerTasks]);
+    }, [tasksForDisplay, activeSchedule?.periodStartDate, activeSchedule?.periodDurationDays]);
+
+    const isDayBuffer = useCallback((dayIndex: number) => bufferDaysBefore > 0 && (dayIndex < bufferDaysBefore || dayIndex >= bufferDaysBefore + periodDurationDays), [bufferDaysBefore, periodDurationDays]);
 
     const weatherByDate = useMemo(() => new Map<string, WeatherForecast>(MOCK_WEATHER.map(w => [w.date, w])), []);
 
@@ -268,7 +518,10 @@ const LookaheadView: React.FC = () => {
             return tasks.map(task => {
                 let updatedTask = { ...task };
                 if (task.id === taskId) {
-                    updatedTask.progress = progress;
+                    const hasSubTasks = task.children && task.children.length > 0;
+                    if (!hasSubTasks) {
+                        updatedTask.progress = progress;
+                    }
                 }
                 
                 if (task.children && task.children.length > 0) {
@@ -365,11 +618,23 @@ const LookaheadView: React.FC = () => {
         setPlannerTasks(prev => updateRecursively(prev));
     }, []);
     
+    const handleUpdateAssignedCrew = useCallback((taskId: string | number, date: string, crewIds: string[]) => {
+        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => tasks.map(task => {
+            if (String(task.id) === String(taskId)) {
+                const assignedCrewByDate = { ...(task.assignedCrewByDate ?? {}), [date]: crewIds };
+                return { ...task, assignedCrewByDate };
+            }
+            return task.children ? { ...task, children: updateRecursively(task.children) } : task;
+        });
+        setPlannerTasks(prev => updateRecursively(prev));
+    }, []);
+
     const handleDayClick = useCallback((task: LookaheadTask, date: Date) => {
-        setSelectedTask(null);
         const dateString = formatDateISO(date);
         const forecast = weatherByDate.get(dateString);
+        setSelectedTask(task);
         setSelectedDay({ task, date, forecast });
+        setIsRightPanelOpen(true);
     }, [weatherByDate]);
     
     const handleConstraintBadgeClick = useCallback((task: LookaheadTask) => {
@@ -413,6 +678,64 @@ const LookaheadView: React.FC = () => {
         setPlannerTasks(prev => removeTask(prev));
     };
 
+    const handleUpdatePlannedQuantity = useCallback((taskId: string | number, planned: number, unit: string) => {
+        const isDraft = activeSchedule.status === ScheduleStatus.Draft;
+        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => tasks.map(t => {
+            if (t.id !== taskId) {
+                return t.children ? { ...t, children: updateRecursively(t.children) } : t;
+            }
+            const locked = t.productionQuantity?.plannedLocked ?? hasAnyActualQuantity(t);
+            if (locked && !isDraft) return t;
+            const dailyMetrics = distributePlannedQuantityUniformly(t, planned, unit);
+            return {
+                ...t,
+                productionQuantity: {
+                    planned,
+                    plannedLocked: false,
+                    unit,
+                    dailyMetrics,
+                },
+            };
+        });
+        setPlannerTasks(prev => updateRecursively(prev));
+    }, [activeSchedule.status]);
+
+    const handleUpdateDailyQuantity = useCallback((taskId: string | number, date: string, plan: number, actual: number) => {
+        const updateRecursively = (tasks: LookaheadTask[]): LookaheadTask[] => tasks.map(t => {
+            if (t.id !== taskId) {
+                return t.children ? { ...t, children: updateRecursively(t.children) } : t;
+            }
+            const pq = ensureProductionQuantity(t);
+            const totalPlanned = pq.planned;
+            const maxActual = getMaxActualForDay(t, date);
+            const clampedActual = Math.min(Math.max(0, actual), maxActual);
+            let dailyMetrics = pq.dailyMetrics.map(m =>
+                m.date === date
+                    ? {
+                        ...m,
+                        quantity: {
+                            ...m.quantity,
+                            plan: Math.min(plan, totalPlanned),
+                            actual: clampedActual,
+                            unit: m.quantity?.unit ?? pq.unit,
+                        },
+                    }
+                    : m
+            );
+            dailyMetrics = ensureDailyPlanWithinTotal(dailyMetrics, totalPlanned, pq.unit);
+            const hasActual = dailyMetrics.some(m => (m.quantity?.actual ?? 0) > 0);
+            return {
+                ...t,
+                productionQuantity: {
+                    ...pq,
+                    plannedLocked: hasActual,
+                    dailyMetrics,
+                },
+            };
+        });
+        setPlannerTasks(prev => updateRecursively(prev));
+    }, []);
+
     const weekHeaders: { label: string; days: number }[] = [];
     let currentDate = new Date(projectStartDate);
     while (currentDate <= projectEndDate) {
@@ -430,26 +753,31 @@ const LookaheadView: React.FC = () => {
         currentDate = addDays(currentDate, daysInWeek);
     }
 
-    const renderCell = (type: LookaheadColumnType, task: LookaheadTask, level: number) => {
+    const renderCell = (type: LookaheadColumnType, task: LookaheadTask, level: number, rowIndex?: number) => {
         switch (type) {
             case 'sNo':
                 return (
                     <RowNumberCheckbox 
-                        index={task.outline || task.sNo}
+                        index={rowIndex ?? task.sNo}
                         isSelected={selectedRowIds.has(task.id)}
                         onToggle={() => toggleRowSelection(task.id)}
                         isCritical={task.isCriticalPath}
                     />
                 );
+            case 'outline':
+                return (
+                    <span className="text-xs font-medium text-gray-700 truncate block" title={task.outline}>{task.outline}</span>
+                );
             case 'name': {
                 const hasBlockingConstraints = task.constraints.some(c => c.severity === 'Blocking');
+                const taskClashes = clashesByTaskId.get(task.id) ?? [];
+                const unresolvedClash = taskClashes.find(c => c.status === 'Unresolved' || c.status === 'Accepted risk');
+
                 const taskDeltas = activeScheduleId ? deltas[activeScheduleId] || [] : [];
                 const taskDelta = taskDeltas.find(d => String(d.taskId) === String(task.id));
-                
                 const isFieldTask = task.taskType === 'Field Task';
-                
                 return (
-                    <div className="flex items-center w-full overflow-hidden group/cell" style={{ paddingLeft: `${8 + (level * 24)}px`}}>
+                    <div className="flex items-center w-full overflow-hidden" style={{ paddingLeft: `${8 + (level * 24)}px`}}>
                         <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 mr-1">
                             {task.children && task.children.length > 0 ? (
                                 <button onClick={(e) => { e.stopPropagation(); handleToggle(task.id); }} className="text-gray-400 hover:text-gray-800">
@@ -458,15 +786,35 @@ const LookaheadView: React.FC = () => {
                             ) : <DocumentIcon className="w-4 h-4 text-gray-400"/>}
                         </div>
                         <span className={`truncate font-medium ${isFieldTask ? 'text-blue-700' : 'text-gray-800'}`} title={task.name}>{task.name}</span>
-                        
-                        {/* Inline Add Button */}
                         {isFieldTask && (
                             <span className="ml-1.5 px-1 rounded bg-blue-100 text-blue-600 text-[8px] font-bold uppercase tracking-wider" title="Field Breakdown Task">Field</span>
                         )}
                         {hasBlockingConstraints && (
-                            <span className="ml-1 text-amber-500" title="Has blocking constraints">⚠️</span>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="ml-1 text-red-500">
+                                        <OctagonXIcon className="w-4 h-4" />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">Has blocking constraints</TooltipContent>
+                            </Tooltip>
                         )}
-                        {taskDelta && (
+                        {unresolvedClash && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setActiveClash(unresolvedClash); }}
+                                        className="ml-1 p-0.5 text-orange-500 hover:text-orange-700 rounded"
+                                        title={`Clash detected: ${unresolvedClash.status}`}
+                                    >
+                                        <AlertTriangleIcon className="w-4 h-4" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">{`Location clash: ${unresolvedClash.location} (${unresolvedClash.status})`}</TooltipContent>
+                            </Tooltip>
+                        )}
+                        {taskDelta && activeSchedule.status === ScheduleStatus.Draft && (
                             <span className={`ml-1.5 px-1 rounded text-[8px] font-bold uppercase ${
                                 taskDelta.type === 'added' ? 'bg-green-100 text-green-600' : 
                                 taskDelta.type === 'modified' ? 'bg-blue-100 text-blue-600' : 
@@ -475,36 +823,132 @@ const LookaheadView: React.FC = () => {
                                 {taskDelta.type}
                             </span>
                         )}
-                        <div className="ml-auto flex items-center gap-1">
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setIsAddTaskModalOpen(true); }}
-                                className="p-1 rounded-full hover:bg-blue-100 text-blue-500 opacity-0 group-hover/cell:opacity-100 transition-opacity"
-                                title="Add task"
+                    </div>
+                );
+            }
+            case 'commitment': {
+                if (persona !== 'sc' || level > 0) return null;
+                const status = commitmentByTaskId[task.id]?.status ?? 'pending';
+                const isNetNew = netNewTaskIds.has(task.id);
+                if (isNetNew && status === 'pending') {
+                    return (
+                        <div className="flex items-center justify-center w-full">
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setTaskForCommitmentModal(task); }}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition-colors"
                             >
-                                <PlusIcon className="w-4 h-4" />
-                            </button>
-                            <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTaskToBreakdown(task);
-                                    setIsFieldBreakdownModalOpen(true);
-                                }}
-                                className="p-1.5 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
-                                title="Field Breakdown"
-                            >
-                                <ListTreeIcon className="w-4 h-4" />
-                            </button>
-                            <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteTask(task.id);
-                                }}
-                                className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover/cell:opacity-100 transition-opacity"
-                                title="Delete Task"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5" />
+                                Pending
                             </button>
                         </div>
+                    );
+                }
+                if (status === 'committed') {
+                    return (
+                        <div className="flex items-center justify-center w-full">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-green-700 bg-green-50 border border-green-200">Committed</span>
+                        </div>
+                    );
+                }
+                if (status === 'rejected') {
+                    return (
+                        <div className="flex items-center justify-center w-full">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-red-700 bg-red-50 border border-red-200">Rejected</span>
+                        </div>
+                    );
+                }
+                if (status === 'proposed') {
+                    return (
+                        <div className="flex items-center justify-center w-full">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200">Proposed</span>
+                        </div>
+                    );
+                }
+                return null;
+            }
+            case 'actions': {
+                const canShowAddCrew = activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0;
+                const isGC = persona === 'gc';
+                const isScPendingCommit = persona === 'sc' && level === 0 && netNewTaskIds.has(task.id) && (commitmentByTaskId[task.id]?.status ?? 'pending') === 'pending';
+                return (
+                    <div className="flex items-center justify-center gap-1 w-full px-1">
+                        {activeSchedule.status !== ScheduleStatus.Closed && (
+                            <>
+                                {isScPendingCommit && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setTaskForCommitmentModal(task); }}
+                                            className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                            aria-label="Commit Required"
+                                        >
+                                            <HandshakeIcon className="w-4 h-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">Commit Required</TooltipContent>
+                                </Tooltip>
+                                )}
+                                {isGC && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setIsAddTaskModalOpen(true); }}
+                                            className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                        >
+                                            <PlusIcon className="w-4 h-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">Add task</TooltipContent>
+                                </Tooltip>
+                                )}
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setTaskToBreakdown(task);
+                                                setIsFieldBreakdownModalOpen(true);
+                                            }}
+                                            className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                        >
+                                            <ListTreeIcon className="w-4 h-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">Field Breakdown</TooltipContent>
+                                </Tooltip>
+                                {canShowAddCrew && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setAddCrewContext({ taskId: task.id, dateString: task.startDate });
+                                                }}
+                                                className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                            >
+                                                <HardHatIcon className="w-4 h-4" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">Add Crew</TooltipContent>
+                                    </Tooltip>
+                                )}
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteTask(task.id);
+                                            }}
+                                            className="p-1.5 text-zinc-600 hover:text-red-700 hover:bg-red-100 rounded"
+                                        >
+                                            <TrashIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">Delete Task</TooltipContent>
+                                </Tooltip>
+                            </>
+                        )}
                     </div>
                 );
             }
@@ -512,6 +956,7 @@ const LookaheadView: React.FC = () => {
                 return (
                     <ConstraintBadge 
                         status={task.status} 
+                        progress={task.progress}
                         onClick={() => handleConstraintBadgeClick(task)} 
                     />
                 );
@@ -523,33 +968,73 @@ const LookaheadView: React.FC = () => {
                         {task.taskType}
                     </span>
                 );
+            case 'quantity': {
+                const planned = getTotalPlannedQuantity(task);
+                const actual = getTotalActualQuantity(task);
+                const unit = getQuantityUnit(task);
+                if (planned === 0 && actual === 0) return <span className="text-gray-400">—</span>;
+                return (
+                    <span className="truncate text-gray-700" title={`Planned: ${formatQuantityDisplay(planned)} / Actual: ${formatQuantityDisplay(actual)} ${unit}`}>
+                        {formatQuantityDisplay(actual)}{planned > 0 ? ` / ${formatQuantityDisplay(planned)}` : ''} <span className="text-gray-400 text-[10px]">{unit}</span>
+                    </span>
+                );
+            }
             case 'contractor': {
                 const isFieldTask = task.taskType === 'Field Task';
-                if (isFieldTask) {
-                    return (
-                        <ContractorSelect
-                            value={task.contractor}
-                            onChange={(val) => handleUpdateContractor(task.id, val)}
-                            isMinimal
-                        />
-                    );
+                const isClosed = activeSchedule.status === ScheduleStatus.Closed;
+                if (isFieldTask && !isClosed) {
+                    return <span className="truncate text-gray-700 min-w-0" title={task.contractor}>{task.contractor}</span>;
                 }
                 return <span className="truncate text-gray-700 min-w-0" title={task.contractor}>{task.contractor}</span>;
             }
-            case 'location':
-                return <span className="truncate text-gray-500 italic min-w-0">{task.location || '-'}</span>;
+            case 'location': {
+                const taskClashes = clashesByTaskId.get(task.id) ?? [];
+                const hasClash = taskClashes.length > 0;
+                const latestClash = taskClashes[0]; // Assuming we care about the first clash found for display
+
+                let clashClasses = '';
+                let clashTitle = task.location || '-';
+
+                if (hasClash) {
+                    if (latestClash.status === 'Unresolved') {
+                        clashClasses = 'text-amber-700 font-semibold bg-amber-50 border border-amber-300';
+                        clashTitle = `Location clash detected: ${latestClash.location} (Unresolved) – click to resolve`;
+                    } else if (latestClash.status === 'Accepted risk') {
+                        clashClasses = 'text-amber-700 font-semibold bg-amber-50 border border-amber-300';
+                        clashTitle = `Location clash detected: ${latestClash.location} (Accepted risk) – click to view/modify`;
+                    } else if (latestClash.status === 'Resolved') {
+                        clashClasses = 'text-green-700 font-semibold bg-green-50 border border-green-300';
+                        clashTitle = `Location clash: ${latestClash.location} (Resolved) – click to view`;
+                    }
+                }
+
+                return (
+                    <button
+                        type="button"
+                        className={`truncate text-gray-500 italic min-w-0 text-left px-1 rounded cursor-pointer ${clashClasses}`}
+                        onClick={hasClash ? (e) => { e.stopPropagation(); setActiveClash(latestClash); } : undefined}
+                        title={clashTitle}
+                    >
+                        {task.location || '-'}
+                    </button>
+                );
+            }
             case 'progress': {
-                const isFieldTask = task.taskType === 'Field Task';
+                const hasSubTasks = task.children && task.children.length > 0;
+                const isClosed = activeSchedule.status === ScheduleStatus.Closed;
+                const isEditable = !hasSubTasks && !isClosed;
                 return (
                     <ProgressCell 
                         progress={task.progress}
-                        isEditable={isFieldTask}
+                        isEditable={isEditable}
                         onChange={(val) => handleUpdateProgress(task.id, val)}
                     />
                 );
             }
-            case 'crewAssigned':
-                return <span className="w-full text-center font-medium text-gray-700">{task.crewAssigned}</span>;
+            case 'crewAssigned': {
+                const count = task.assignedCrewByDate?.[task.startDate]?.length ?? task.crewAssigned;
+                return <span className="w-full text-center font-medium text-gray-700">{count}</span>;
+            }
             case 'planStart': {
                 const isDelayed = task.fieldStartDate && task.fieldStartDate > task.startDate;
                 return (
@@ -581,52 +1066,73 @@ const LookaheadView: React.FC = () => {
         }
     };
     
-    const renderTaskRows = (tasks: LookaheadTask[], level: number): React.ReactNode[] => {
-        return tasks.flatMap(task => {
-            const isSelected = selectedRowIds.has(task.id);
-            const isFieldTask = task.taskType === 'Field Task';
-            const row = (
+    const renderLeftRow = (task: LookaheadTask, level: number, rowIndex: number) => {
+        const isSelected = selectedRowIds.has(task.id);
+        const isFieldTask = task.taskType === 'Field Task';
+        return (
+            <div 
+                key={task.id} 
+                className={`group flex transition-colors cursor-pointer ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`} 
+                style={{ height: `${rowHeight}px` }}
+                onClick={() => { setSelectedDay(null); setSelectedTask(task); setIsRightPanelOpen(true); }}
+            >
                 <div 
-                    key={task.id} 
-                    className={`group flex border-b border-gray-200 first:border-t transition-colors ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : ''}`} 
-                    style={{ height: `${rowHeight}px`}}
+                    className={`flex ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`}
+                    style={{ width: `${totalLeftPanelWidth}px` }}
                 >
-                    {/* Left Panel */}
-                    <div 
-                        className={`sticky left-0 z-30 flex border-r border-gray-200 transition-shadow cursor-pointer ${isScrolled ? 'shadow-[2px_0_5px_rgba(0,0,0,0.1)]' : ''} ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`} 
-                        style={{ width: `${totalLeftPanelWidth}px` }}
-                        onClick={() => setSelectedTask(task)}
-                    >
-                        {visiblePanelColumns.map((col, index) => (
-                             <div 
-                                key={col.id} 
-                                className={`flex-shrink-0 flex items-center px-2 text-sm relative ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo') ? '' : 'overflow-hidden'} ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : ''}`}
-                                style={{ width: `${col.widthPx}px` }}
-                            >
-                                {(col.lookaheadType === 'sNo' && task.isCriticalPath) && (
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600" />
-                                )}
-                                <div className={`w-full h-full min-w-0 flex items-center ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo') ? '' : 'overflow-hidden'}`}>
-                                    {renderCell(col.lookaheadType, task, level)}
-                                </div>
-                             </div>
-                        ))}
-                    </div>
-                    {/* Right Panel (Timeline) */}
-                    <div className="relative flex-grow flex">
-                        <DraggableTaskBar
-                            task={task}
-                            projectStartDate={projectStartDate}
-                            dayWidth={DAY_WIDTH}
-                            onUpdateTask={handleUpdateTaskDates}
-                            onDayClick={handleDayClick}
-                            offsetLeft={0}
-                        />
-                    </div>
+                    {visiblePanelColumns.map((col) => {
+                        const bgClass = isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white';
+                        return (
+                        <div 
+                            key={col.id} 
+                            className={`flex-shrink-0 flex items-center px-2 text-sm relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'actions' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'} ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : ''} ${col.isSticky ? `sticky z-20 ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : bgClass}` : ''}`}
+                            style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
+                        >
+                            {(col.lookaheadType === 'sNo' && task.isCriticalPath) && (
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600" />
+                            )}
+                            <div className={`w-full h-full min-w-0 flex items-center ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'}`}>
+                                {renderCell(col.lookaheadType, task, level, rowIndex)}
+                            </div>
+                        </div>
+                        );
+                    })}
                 </div>
-            );
-            return [row, task.isExpanded && task.children ? renderTaskRows(task.children, level + 1) : []];
-        });
+            </div>
+        );
+    };
+
+    const renderRightRow = (task: LookaheadTask) => {
+        const isSelected = selectedRowIds.has(task.id);
+        const isFieldTask = task.taskType === 'Field Task';
+        return (
+            <div 
+                key={task.id} 
+                className={`group flex border-b border-gray-200 first:border-t transition-colors ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : ''}`} 
+                style={{ height: `${rowHeight}px` }}
+            >
+                <div className="relative flex flex-grow" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
+                    <DraggableTaskBar
+                        task={task}
+                        projectStartDate={projectStartDate}
+                        projectEndDate={projectEndDate}
+                        dayWidth={DAY_WIDTH}
+                        onUpdateTask={handleUpdateTaskDates}
+                        onDayClick={handleDayClick}
+                        offsetLeft={0}
+                        disabled={activeSchedule.status === ScheduleStatus.Closed}
+                    />
+                </div>
+            </div>
+        );
+    };
+
+    const renderLeftRows = (): React.ReactNode[] => {
+        return flattenedTaskRows.map(({ task, level }, i) => renderLeftRow(task, level, i + 1));
+    };
+
+    const renderRightRows = (): React.ReactNode[] => {
+        return flattenedTaskRows.map(({ task }) => renderRightRow(task));
     };
 
     const Resizer: React.FC<{ onMouseDown: (e: React.MouseEvent) => void; isLast?: boolean }> = ({ onMouseDown, isLast }) => (
@@ -638,152 +1144,271 @@ const LookaheadView: React.FC = () => {
         />
     );
 
-    const SplitResizer: React.FC = () => {
-        const lastCol = visiblePanelColumns[visiblePanelColumns.length - 1];
-        if (!lastCol) return null;
+    const effectiveLeftViewportWidth = leftPanelViewportWidth > 0 ? leftPanelViewportWidth : widthThroughEndColumn;
 
-        return (
+    const SplitResizer: React.FC = () => (
             <div 
-                onMouseDown={(e) => handleMouseDown(e, lastCol.id, lastCol.widthPx)}
-                className="absolute top-0 bottom-0 z-[50] cursor-col-resize group pointer-events-auto"
-                style={{ 
-                    left: `${totalLeftPanelWidth - 4}px`,
-                    width: '8px',
-                }}
+                onMouseDown={handleSplitMouseDown}
+                className="flex-shrink-0 cursor-col-resize flex items-stretch justify-center group/split"
+                style={{ width: `${SPLIT_HIT_WIDTH}px` }}
             >
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div 
+                    className="h-full bg-gray-300 group-hover/split:bg-blue-300 transition-colors"
+                    style={{ width: `${SPLIT_GRABBER_WIDTH}px` }}
+                />
             </div>
         );
-    };
 
     return (
         <div className="flex h-full flex-col p-4 gap-4">
             <div className="flex items-center justify-between">
-                <ViewControls />
+                <ViewControls
+                    renderBeforeSearch={
+                        <button
+                            onClick={() => setIsLeftPanelOpen(prev => !prev)}
+                            className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                            title={isLeftPanelOpen ? "Collapse left table panel" : "Expand left table panel"}
+                        >
+                            <PanelLeftIcon className="w-4 h-4" />
+                        </button>
+                    }
+                />
+                                <div className="flex items-center gap-2">
+                                    <ViewSettingsMenu />
+                                    <button
+                                        onClick={() => setIsRightPanelOpen(prev => !prev)}
+                                        className="p-1.5 text-zinc-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                        title={isRightPanelOpen ? "Collapse right panel" : "Expand right panel"}
+                                    >
+                                        <PanelRightIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
             </div>
             
             <div 
                 className="flex-grow flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative" 
                 style={{ '--table-font-size': `${fontSize}px` } as React.CSSProperties}
             >
-                {/* Main Planner */}
-                <div className="flex-grow overflow-hidden relative flex">
-                    <div ref={scrollContainerRef} className="flex-grow overflow-auto min-w-0">
-                        <div className="relative" style={{ minWidth: `${totalLeftPanelWidth + (totalDays * DAY_WIDTH)}px`}}>
-                            {/* Unified Background Grid */}
+                {/* Main Planner - Split view with independent scrollbars */}
+                <div ref={plannerContainerRef} className="flex-grow overflow-hidden flex min-w-0">
+                    {/* Left pane - table columns; togglable like right details panel */}
+                    <div
+                        className="flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col"
+                        style={{ width: isLeftPanelOpen ? effectiveLeftViewportWidth : 0 }}
+                    >
+                        <div
+                            ref={leftScrollRef}
+                            className="flex-shrink-0 overflow-auto flex flex-col border-r-0 h-full"
+                            style={{ width: `${effectiveLeftViewportWidth}px`, minWidth: `${MIN_LEFT_VIEWPORT}px` }}
+                            onScroll={() => syncVerticalScroll('left')}
+                        >
+                        <div className="sticky top-0 z-40 bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-t border-b border-gray-200 flex-shrink-0">
+                            <div className="border-b border-gray-200" style={{ height: '30px' }}>
+                                <div className="bg-gray-50 flex" style={{ width: `${totalLeftPanelWidth}px`, minHeight: '30px' }} />
+                            </div>
+                            <div className="flex" style={{ height: '50px' }}>
+                                <div className="flex bg-gray-50" style={{ width: `${totalLeftPanelWidth}px` }}>
+                                    {visiblePanelColumns.map((col, index) => (
+                                        <div
+                                            key={col.id}
+                                            className={`flex-shrink-0 flex items-end pb-1 px-2 text-xs font-semibold text-gray-600 uppercase relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${col.isSticky ? 'sticky z-30 bg-gray-50' : ''}`}
+                                            style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
+                                        >
+                                            {col.lookaheadType === 'sNo' ? (
+                                                <div className="flex items-center justify-center w-full mb-0.5">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedRowIds.size > 0 && selectedRowIds.size === allTaskIds.length}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                el.indeterminate = selectedRowIds.size > 0 && selectedRowIds.size < allTaskIds.length;
+                                                            }
+                                                        }}
+                                                        onChange={toggleAllSelection}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span className="truncate w-full min-w-0">{col.label}</span>
+                                            )}
+                                            <Resizer
+                                                onMouseDown={(e) => handleMouseDown(e, col.id, col.widthPx, index === visiblePanelColumns.length - 1)}
+                                                isLast={index === visiblePanelColumns.length - 1}
+                                            />
+                                            {index === visiblePanelColumns.length - 1 && (
+                                                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-gray-300/30 pointer-events-none" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white flex-shrink-0" style={{ fontSize: `${fontSize}px` }}>
+                            {renderLeftRows()}
+                        </div>
+                        </div>
+                    </div>
+
+                    {isLeftPanelOpen && <SplitResizer />}
+
+                    {/* Right panel - timeline, both scrolls */}
+                    <div
+                        ref={rightScrollRef}
+                        className="flex-1 overflow-auto min-w-0"
+                        onScroll={() => syncVerticalScroll('right')}
+                    >
+                        <div className="relative" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
+                            {/* Background grid */}
                             <div
-                                className="absolute top-0 left-0 w-full h-full pt-[80px] flex"
-                                style={{ zIndex: 0 }}
+                                className="absolute top-0 left-0 w-full h-full pt-[80px] grid"
+                                style={{ zIndex: 0, gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
                                 aria-hidden="true"
                             >
-                                <div style={{ width: `${totalLeftPanelWidth}px` }} className="flex-shrink-0 sticky left-0 bg-white z-10"></div>
+                                {Array.from({ length: totalDays }).map((_, i) => {
+                                    const date = addDays(projectStartDate, i);
+                                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                    const isBuffer = isDayBuffer(i);
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`h-full border-r ${isBuffer ? 'bg-gray-100 border-gray-200' : isWeekend ? 'bg-gray-50 border-gray-100' : 'border-gray-100'}`}
+                                            title={isBuffer ? 'Outside lookahead period' : undefined}
+                                        />
+                                    );
+                                })}
+                            </div>
+
+                            {/* Timeline header */}
+                            <div className="sticky top-0 bg-gray-50 z-40 text-xs font-semibold text-gray-600 uppercase border-b border-t border-gray-200">
+                                <div className="flex border-b border-gray-200" style={{ height: '30px' }}>
+                                    {weekHeaders.map((week, i) => (
+                                        <div key={i} className="flex items-center justify-center border-r border-gray-200 flex-shrink-0 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-1" style={{ width: `${week.days * DAY_WIDTH}px` }} title={week.label}>{week.label}</div>
+                                    ))}
+                                </div>
                                 <div
-                                    className="flex-grow grid"
-                                    style={{ gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
+                                    className="grid flex-shrink-0"
+                                    style={{ height: '50px', gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
                                 >
                                     {Array.from({ length: totalDays }).map((_, i) => {
                                         const date = addDays(projectStartDate, i);
-                                        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                        const dateString = formatDateISO(date);
+                                        const forecast = weatherByDate.get(dateString) ?? { date: dateString, icon: 'cloud' as const, temp: 70 };
+                                        const isBuffer = isDayBuffer(i);
                                         return (
-                                            <div key={i} className={`h-full border-r border-gray-100 ${isWeekend ? 'bg-gray-50' : ''}`}></div>
+                                            <div
+                                                key={i}
+                                                className={`flex flex-col items-center justify-between py-1 border-r border-gray-200 ${isBuffer ? 'bg-gray-100 opacity-60 pointer-events-none' : ''}`}
+                                                title={isBuffer ? 'Outside lookahead period' : `${forecast.temp}°F`}
+                                            >
+                                                <div className="flex items-center">
+                                                    <span className={`text-[10px] mr-0.5 ${isBuffer ? 'text-gray-400' : 'text-gray-400'}`}>{date.toLocaleString('default', { weekday: 'short' })[0]}</span>
+                                                    <span className={isBuffer ? 'font-normal text-gray-500' : 'font-normal'}>{date.getDate()}</span>
+                                                </div>
+                                                <div className="h-7 flex flex-col items-center justify-center">
+                                                    {!isBuffer && (
+                                                        <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
+                                                            <WeatherIcon icon={forecast.icon} />
+                                                            <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
+                                                        </div>
+                                                    )}
+                                                    {isBuffer && <div style={{ height: '28px' }} />}
+                                                </div>
+                                            </div>
                                         );
                                     })}
                                 </div>
                             </div>
 
-                            {/* Header */}
-                            <div className="sticky top-0 bg-gray-50 z-40 text-xs font-semibold text-gray-600 uppercase border-b border-t border-gray-200">
-                                <div className="flex border-b border-gray-200" style={{ height: '30px' }}>
-                                    <div className={`sticky left-0 bg-gray-50 flex border-r border-gray-200 transition-shadow ${isScrolled ? 'shadow-[2px_0_5px_rgba(0,0,0,0.1)]' : ''}`} style={{ width: `${totalLeftPanelWidth}px` }}></div>
-                                    <div className="flex-grow flex">
-                                        {weekHeaders.map((week, i) => (
-                                            <div key={i} className="flex items-center justify-center border-r border-gray-200" style={{ width: `${week.days * DAY_WIDTH}px`}}>{week.label}</div>
-                                        ))}
-                                    </div>
-                                </div>
-                                 <div className="flex" style={{ height: '50px' }}>
-                                     <div className={`sticky left-0 bg-gray-50 flex border-r border-gray-200 transition-shadow ${isScrolled ? 'shadow-[2px_0_5px_rgba(0,0,0,0.1)]' : ''}`} style={{ width: `${totalLeftPanelWidth}px` }}>
-                                        {visiblePanelColumns.map((col, index) => (
-                                            <div 
-                                                key={col.id} 
-                                                className={`relative flex-shrink-0 px-2 flex items-end pb-1 ${index > 0 ? 'border-l border-gray-200' : ''} ${col.lookaheadType === 'sNo' ? 'justify-center' : ''}`}
-                                                style={{ width: `${col.widthPx}px` }}
-                                            >
-                                                {col.lookaheadType === 'sNo' ? (
-                                                    <div className="flex items-center justify-center w-full mb-0.5">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={selectedRowIds.size > 0 && selectedRowIds.size === allTaskIds.length}
-                                                            ref={(el) => {
-                                                                if (el) {
-                                                                    el.indeterminate = selectedRowIds.size > 0 && selectedRowIds.size < allTaskIds.length;
-                                                                }
-                                                            }}
-                                                            onChange={toggleAllSelection}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <span className="truncate w-full min-w-0">{col.label}</span>
-                                                )}
-                                                <Resizer 
-                                                    onMouseDown={(e) => handleMouseDown(e, col.id, col.widthPx)} 
-                                                    isLast={index === visiblePanelColumns.length - 1}
-                                                />
-                                                {index === visiblePanelColumns.length - 1 && (
-                                                    <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-gray-300/30 pointer-events-none" />
-                                                )}
-                                            </div>
-                                        ))}
-                                     </div>
-                                     <div
-                                        className="flex-grow grid"
-                                        style={{ gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
-                                     >
-                                        {Array.from({length: totalDays}).map((_, i) => {
-                                            const date = addDays(projectStartDate, i);
-                                            const dateString = formatDateISO(date);
-                                            const forecast = weatherByDate.get(dateString);
-                                            return (
-                                                <div key={i} className="flex flex-col items-center justify-between py-1 border-r border-gray-200">
-                                                    <div className="flex items-center">
-                                                        <span className="text-[10px] text-gray-400 mr-0.5">{date.toLocaleString('default', { weekday: 'short' })[0]}</span>
-                                                        <span className="font-normal">{date.getDate()}</span>
-                                                    </div>
-                                                    <div className="h-7 flex flex-col items-center justify-center">
-                                                        {forecast ? (
-                                                            <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
-                                                                <WeatherIcon icon={forecast.icon} />
-                                                                <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
-                                                            </div>
-                                                        ) : <div style={{height: '28px'}}></div>}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                     </div>
-                                 </div>
-                            </div>
-
-                            {/* Body */}
+                            {/* Timeline body */}
                             <div className="relative z-10">
-                                {renderTaskRows(plannerTasks, 0)}
-                            </div>
-
-                            {/* Global Split Resizer */}
-                            <div className="absolute inset-0 pointer-events-none z-[60]">
-                                <SplitResizer />
+                                {renderRightRows()}
                             </div>
                         </div>
                     </div>
-                    <LookaheadDetailsPanel 
-                        task={selectedTask} 
-                        onClose={() => setSelectedTask(null)} 
-                        onAddConstraint={handleAddConstraint} 
-                        onUpdateProgress={handleUpdateProgress}
-                        onUpdateContractor={handleUpdateContractor}
-                    />
-                    <DailyMetricsPanel data={selectedDay} onClose={() => setSelectedDay(null)} />
+
+                    {/* Right pane - always in layout; width 0 when closed so content is pushed, not overlayed */}
+                    <div
+                        className="flex-shrink-0 overflow-hidden bg-white border-l border-gray-200 flex flex-col"
+                        style={{
+                            width: isRightPanelOpen ? 420 : 0,
+                            transition: 'width 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+                        }}
+                        role="region"
+                        aria-label="Details panel"
+                    >
+                        {isRightPanelOpen && (
+                            <>
+                                {selectedDay ? (
+                                    <DailyMetricsPanel
+                                        data={{
+                                            ...selectedDay,
+                                            task: findTaskById(plannerTasks, selectedDay.task.id) ?? selectedDay.task,
+                                        }}
+                                        onClose={handleCloseRightPanel}
+                                        onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
+                                        onUpdateAssignedCrew={
+                                            activeSchedule.status === ScheduleStatus.Active &&
+                                            PROJECT_COMPANY_NAMES.some(c => selectedDay.task.contractor?.includes(c))
+                                                ? handleUpdateAssignedCrew
+                                                : undefined
+                                        }
+                                        onOpenAddCrew={
+                                            activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
+                                                ? (taskId, dateStr) => setAddCrewContext({ taskId, dateString: dateStr })
+                                                : undefined
+                                        }
+                                        isActive={activeSchedule.status === ScheduleStatus.Active}
+                                        projectCrew={MOCK_PROJECT_CREW}
+                                        embedded
+                                    />
+                                ) : selectedTask ? (
+                                    <LookaheadDetailsPanel
+                                        task={findTaskById(plannerTasks, selectedTask.id) ?? selectedTask}
+                                        taskDelta={activeScheduleId ? (deltas[activeScheduleId] || []).find(d => String(d.taskId) === String(selectedTask.id)) : undefined}
+                                        onClose={handleCloseRightPanel}
+                                        onAddConstraint={activeSchedule.status !== ScheduleStatus.Closed ? handleAddConstraint : undefined}
+                                        onUpdateProgress={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateProgress : undefined}
+                                        onUpdateContractor={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateContractor : undefined}
+                                        onUpdatePlannedQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdatePlannedQuantity : undefined}
+                                        onUpdateDailyQuantity={activeSchedule.status !== ScheduleStatus.Closed ? handleUpdateDailyQuantity : undefined}
+                                        onOpenAddCrew={
+                                            activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0
+                                                ? (taskId, dateString) => setAddCrewContext({ taskId, dateString })
+                                                : undefined
+                                        }
+                                        isDraft={activeSchedule.status === ScheduleStatus.Draft}
+                                        isReadOnly={activeSchedule.status === ScheduleStatus.Closed}
+                                        embedded
+                                        commitment={commitmentByTaskId[selectedTask.id]}
+                                        isNetNew={netNewTaskIds.has(selectedTask.id)}
+                                        isTopLevelTask={tasksForDisplay.some(t => String(t.id) === String(selectedTask.id))}
+                                        onSetCommitment={(state) => setCommitment(selectedTask.id, state)}
+                                        persona={persona}
+                                        addProjectRisk={addProjectRisk}
+                                        onOpenCommitmentModal={() => setTaskForCommitmentModal(selectedTask)}
+                                    />
+                                ) : (
+                                    /* Empty state: panel open but nothing selected */
+                                    <div className="flex flex-col h-full">
+                                        <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+                                            <h2 className="text-lg font-semibold text-gray-800">Details</h2>
+                                            <button
+                                                onClick={() => setIsRightPanelOpen(false)}
+                                                className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                                aria-label="Close panel"
+                                            >
+                                                <XIcon className="w-5 h-5" />
+                                            </button>
+                                        </header>
+                                        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
+                                            <p className="text-sm font-medium text-gray-700 mb-1">No task or day selected</p>
+                                            <p className="text-xs">Select a task row or a day cell in the timeline to view details here.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -807,6 +1432,44 @@ const LookaheadView: React.FC = () => {
                 onClose={() => setIsFieldBreakdownModalOpen(false)}
                 parentTask={taskToBreakdown}
                 onSave={handleSaveBreakdown}
+            />
+
+            {addCrewContext && (
+                <AddCrewModal
+                    isOpen={true}
+                    onClose={() => setAddCrewContext(null)}
+                    onConfirm={(crewIds) => {
+                        const taskId = addCrewContext.taskId;
+                        handleUpdateAssignedCrew(taskId, addCrewContext.dateString, crewIds);
+                        setAddCrewContext(null);
+                        // Show commitment modal so user sees "Crew added" updated (or open it if they added crew from elsewhere)
+                        if (persona === 'sc' && netNewTaskIds.has(taskId)) {
+                            const task = findTaskById(plannerTasks, taskId);
+                            setTaskForCommitmentModal(task ?? ({ id: taskId } as LookaheadTask));
+                        }
+                    }}
+                    availableCrew={MOCK_PROJECT_CREW}
+                    alreadyAssigned={(findTaskById(plannerTasks, addCrewContext.taskId)?.assignedCrewByDate?.[addCrewContext.dateString] ?? [])}
+                />
+            )}
+
+            <CommitmentModal
+                isOpen={!!taskForCommitmentModal}
+                onClose={() => setTaskForCommitmentModal(null)}
+                task={taskForCommitmentModal ? (findTaskById(plannerTasks, taskForCommitmentModal.id) ?? taskForCommitmentModal) : null}
+                commitment={taskForCommitmentModal ? commitmentByTaskId[taskForCommitmentModal.id] : null}
+                onSetCommitment={(state) => taskForCommitmentModal && setCommitment(taskForCommitmentModal.id, state)}
+                addProjectRisk={addProjectRisk}
+                onOpenAddCrew={activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0 ? (taskId, dateString) => setAddCrewContext({ taskId, dateString }) : undefined}
+            />
+
+            <ClashResolutionModal
+                clash={activeClash}
+                isOpen={!!activeClash}
+                onClose={() => setActiveClash(null)}
+                onSave={(updated) => {
+                    setClashes(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+                }}
             />
         </div>
     );

@@ -1,4 +1,30 @@
-import { LookaheadTask, ConstraintType, ConstraintStatus, WeatherForecast } from './types';
+import { LookaheadTask, ConstraintType, ConstraintStatus, WeatherForecast, CrewMember } from './types';
+
+export const MOCK_PROJECT_CREW: CrewMember[] = [
+  { id: 'c1', name: 'Daniel Mac', title: 'Site Supervisor', email: 'danielmac07@yopmail.com', phone: '+1999555678' },
+  { id: 'c2', name: 'Heller Dell', title: 'Site Supervisor', email: 'heller@yopmail.com', phone: '+1-999555778' },
+  { id: 'c3', name: 'Jodi Hubbard', title: 'Field Crew', email: 'jodih1898@yopmail.com', phone: '+1453555150' },
+  { id: 'c4', name: 'Kelly Sharp', title: 'Field Crew', email: 'kellys6966@yopmail.com', phone: '+1723555824' },
+  { id: 'c5', name: 'Kimberly Hoover', title: 'Foreman', email: 'kimberlyh3339@yopmail.com', phone: '+1667555012' },
+  { id: 'c6', name: 'Lisa Blair', title: 'Scheduler', email: 'lisab2968@yopmail.com', phone: '+1837555858' },
+  { id: 'c7', name: 'Nathan Singh', title: 'Field Crew', email: 'nathans1915@yopmail.com', phone: '+1086555752' },
+  { id: 'c8', name: 'Sean Douglas', title: 'Crew', email: 'seand2053@yopmail.com', phone: '+1 940555725' },
+  { id: 'c9', name: 'Steven Mitchell', title: 'Field Crew', email: 'stevenm0285@yopmail.com', phone: '+1404555343' },
+  { id: 'c10', name: 'Susan Thomas', title: 'Foreman', email: 'susant2544@yopmail.com', phone: '+1145555544' },
+];
+
+/** Contractor names for "our" company (GC); crew can only be added to tasks from these */
+export const PROJECT_COMPANY_NAMES = ['Martinez DevelopmentS'];
+
+/** Predefined rejection reasons when SC cannot commit (Unanswered RFI auto-flags as project risk). */
+export const REJECTION_REASONS = [
+  { code: 'unanswered_rfi', label: 'Unanswered RFI' },
+  { code: 'material_not_available', label: 'Material not available' },
+  { code: 'equipment_not_available', label: 'Equipment not available' },
+  { code: 'crew_not_available', label: 'Crew not available' },
+  { code: 'other', label: 'Other' },
+] as const;
+export const REJECTION_REASON_UNANSWERED_RFI = 'unanswered_rfi';
 
 export const PPC_DATA = [82, 85, 78, 88, 92, 90]; // Last 6 weeks
 
@@ -68,24 +94,42 @@ export const PLANNER_TASKS: LookaheadTask[] = [
     outline: '3.1',
     name: 'Pave Access Roads',
     taskCode: '32 13 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Martinez DevelopmentS (GC)
     contractor: 'Martinez DevelopmentS',
-    location: '',
+    location: 'Building A', // CLASH LOCATION
     progress: 62,
     crewAssigned: 9,
-    startDate: '2026-02-02',
-    finishDate: '2026-02-06',
-    masterStartDate: '2026-02-02',
-    masterFinishDate: '2026-02-06',
+    startDate: '2026-02-12', // CLASH START DATE
+    finishDate: '2026-02-20', // CLASH END DATE
+    masterStartDate: '2026-02-12',
+    masterFinishDate: '2026-02-20',
     isExpanded: true,
     ppcHistory: [82, 85, 78, 88, 92, 90],
+    productionQuantity: {
+      planned: 1200,
+      plannedLocked: true,
+      unit: 'CY',
+      dailyMetrics: [ // Updated daily metrics to match new task dates
+        { date: '2026-02-12', quantity: { plan: 240, actual: 250, unit: 'CY' }, hours: { plan: 8, actual: 8 }, crew: { plan: 9, actual: 9 } },
+        { date: '2026-02-13', quantity: { plan: 240, actual: 235, unit: 'CY' }, hours: { plan: 8, actual: 8 }, crew: { plan: 9, actual: 9 } },
+        { date: '2026-02-14', quantity: { plan: 240, actual: 240, unit: 'CY' }, hours: { plan: 8, actual: 8 }, crew: { plan: 9, actual: 9 } },
+        { date: '2026-02-15', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+        { date: '2026-02-16', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+        { date: '2026-02-17', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+        { date: '2026-02-18', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+        { date: '2026-02-19', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+        { date: '2026-02-20', quantity: { plan: 240, actual: 0, unit: 'CY' }, hours: { plan: 8, actual: 0 }, crew: { plan: 9, actual: 0 } },
+      ],
+    },
     status: {
       [ConstraintType.Predecessor]: ConstraintStatus.Complete,
-      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Pending, // Set to Pending for initial clash demo status
       [ConstraintType.Submittal]: ConstraintStatus.Complete,
-      [ConstraintType.Material]: ConstraintStatus.OnSite,
+      [ConstraintType.Material]: ConstraintStatus.Pending, // Set to Pending for initial clash demo status
     },
-    constraints: [],
+    constraints: [
+      { type: ConstraintType.RFI, name: 'RFI #001: Foundation Drawings', status: ConstraintStatus.Pending, severity: 'Warning' }
+    ],
     manHours: { actual: 120, budget: 200 },
     children: []
   },
@@ -102,6 +146,28 @@ export const PLANNER_TASKS: LookaheadTask[] = [
     crewAssigned: 4,
     startDate: '2026-02-04',
     finishDate: '2026-02-18',
+    productionQuantity: {
+      planned: 500,
+      plannedLocked: false,
+      unit: 'LF',
+      dailyMetrics: [
+        { date: '2026-02-04', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-05', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-06', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-07', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-08', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-09', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-10', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-11', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-12', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-13', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-14', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-15', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-16', quantity: { plan: 33.33, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-17', quantity: { plan: 33.34, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+        { date: '2026-02-18', quantity: { plan: 33.35, actual: 0, unit: 'LF' }, hours: { plan: 8, actual: 0 }, crew: { plan: 4, actual: 0 } },
+      ],
+    },
     masterStartDate: '2026-02-04',
     masterFinishDate: '2026-02-18',
     status: {
@@ -119,7 +185,7 @@ export const PLANNER_TASKS: LookaheadTask[] = [
     outline: '3.3',
     name: 'Install Main Gates',
     taskCode: '32 30 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Martinez DevelopmentS
     contractor: 'Martinez DevelopmentS',
     location: '',
     progress: 33,
@@ -138,12 +204,38 @@ export const PLANNER_TASKS: LookaheadTask[] = [
     manHours: { actual: 20, budget: 60 },
   },
   {
+    id: 5, // NEW TASK FOR CLASH DEMO
+    sNo: 5,
+    outline: '3.4',
+    name: 'Install Precast Panels',
+    taskCode: '03 40 00',
+    taskType: 'Normal Task', // Elliott Subcontractors (SC)
+    contractor: 'Elliott Subcontractors',
+    location: 'Building A', // CLASH LOCATION
+    progress: 0,
+    crewAssigned: 5,
+    startDate: '2026-02-10', // CLASH START DATE
+    finishDate: '2026-02-28', // CLASH END DATE
+    masterStartDate: '2026-02-10',
+    masterFinishDate: '2026-02-28',
+    status: {
+      [ConstraintType.Predecessor]: ConstraintStatus.Pending,
+      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Pending,
+      [ConstraintType.Material]: ConstraintStatus.Complete,
+    },
+    constraints: [
+      { type: ConstraintType.Predecessor, name: 'Foundation complete', status: ConstraintStatus.Pending, severity: 'Blocking' }
+    ],
+    manHours: { actual: 0, budget: 160 },
+  },
+  {
     id: 7,
     sNo: 7,
     outline: '7.1.1',
     name: 'conduits from floor 1 to 3',
     taskCode: '26 00 00',
-    taskType: 'Budget Task',
+    taskType: 'Budget Task', // Elliott Subcontractors
     contractor: 'Elliott Subcontractors',
     location: '',
     progress: 0,
@@ -162,7 +254,103 @@ export const PLANNER_TASKS: LookaheadTask[] = [
         { type: ConstraintType.Predecessor, name: 'Main Feeder', status: ConstraintStatus.Overdue, severity: 'Blocking' }
     ],
     manHours: { actual: 0, budget: 120 },
-  }
+  },
+  {
+    id: 12, // Changed from 8 to 12
+    sNo: 12,
+    outline: '7.1.2',
+    name: 'Building B Internal Wiring',
+    taskCode: '26 05 00',
+    taskType: 'Normal Task', // Elliott Subcontractors
+    contractor: 'Elliott Subcontractors',
+    location: 'Building B', // CHANGED LOCATION TO AVOID CLASH
+    progress: 0,
+    crewAssigned: 0,
+    startDate: '2026-02-10',
+    finishDate: '2026-02-28',
+    masterStartDate: '2026-02-10',
+    masterFinishDate: '2026-02-28',
+    status: {
+      [ConstraintType.Predecessor]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.Material]: ConstraintStatus.OnSite,
+    },
+    constraints: [],
+    manHours: { actual: 0, budget: 80 },
+  },
+  {
+    id: 9,
+    sNo: 9,
+    outline: '7.1.3',
+    name: 'Lighting and devices – Floors 1–2',
+    taskCode: '26 51 00',
+    taskType: 'Normal Task', // Elliott Subcontractors
+    contractor: 'Elliott Subcontractors',
+    location: 'Floors 1-2',
+    progress: 0,
+    crewAssigned: 0,
+    startDate: '2026-03-01',
+    finishDate: '2026-03-15',
+    masterStartDate: '2026-03-01',
+    masterFinishDate: '2026-03-15',
+    status: {
+      [ConstraintType.Predecessor]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.Material]: ConstraintStatus.OnSite,
+    },
+    constraints: [],
+    manHours: { actual: 0, budget: 60 },
+  },
+  {
+    id: 10,
+    sNo: 10,
+    outline: '7.1.4',
+    name: 'Grounding and bonding',
+    taskCode: '26 05 00',
+    taskType: 'Normal Task', // Elliott Subcontractors
+    contractor: 'Elliott Subcontractors',
+    location: 'Site Wide',
+    progress: 0,
+    crewAssigned: 0,
+    startDate: '2026-02-15',
+    finishDate: '2026-02-22',
+    masterStartDate: '2026-02-15',
+    masterFinishDate: '2026-02-22',
+    status: {
+      [ConstraintType.Predecessor]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.Material]: ConstraintStatus.OnSite,
+    },
+    constraints: [],
+    manHours: { actual: 0, budget: 40 },
+  },
+  {
+    id: 11,
+    sNo: 11,
+    outline: '7.1.5',
+    name: 'Fire alarm devices – Zone A',
+    taskCode: '28 31 00',
+    taskType: 'Normal Task', // Elliott Subcontractors
+    contractor: 'Elliott Subcontractors',
+    location: 'Zone A',
+    progress: 0,
+    crewAssigned: 0,
+    startDate: '2026-03-10',
+    finishDate: '2026-03-20',
+    masterStartDate: '2026-03-10',
+    masterFinishDate: '2026-03-20',
+    status: {
+      [ConstraintType.Predecessor]: ConstraintStatus.Complete,
+      [ConstraintType.RFI]: ConstraintStatus.Complete,
+      [ConstraintType.Submittal]: ConstraintStatus.Complete,
+      [ConstraintType.Material]: ConstraintStatus.OnSite,
+    },
+    constraints: [],
+    manHours: { actual: 0, budget: 50 },
+  },
 ];
 
 export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
@@ -172,7 +360,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '1',
     name: 'Preconstruction & Mobilization',
     taskCode: '01 89 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Martinez DevelopmentS',
     location: 'Site Wide',
     progress: 100,
@@ -194,7 +382,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '1.1',
     name: 'Site Survey & Geotechnical Investigation',
     taskCode: '01 89 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Martinez DevelopmentS',
     location: 'Site Wide',
     progress: 100,
@@ -216,7 +404,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '1.2',
     name: 'Building Permits & Approval',
     taskCode: '01 89 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Martinez DevelopmentS',
     location: 'Office',
     progress: 100,
@@ -238,7 +426,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '2',
     name: 'Site Setup',
     taskCode: '31 10 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Martinez DevelopmentS',
     location: 'Site Wide',
     progress: 100,
@@ -261,7 +449,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '2.1',
     name: 'Site Clearance & Grubbing',
     taskCode: '31 10 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Martinez DevelopmentS',
     location: 'Zone A',
     progress: 100,
@@ -284,7 +472,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '4',
     name: 'Earthwork & Foundations',
     taskCode: '00 01 01',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Mora Specialty Contractors',
     location: 'Foundation',
     progress: 100,
@@ -308,7 +496,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '4.2.1',
     name: 'Foundation Footings',
     taskCode: '31 00 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Mora Specialty Contractors',
     location: 'Foundation',
     progress: 100,
@@ -331,7 +519,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '4.3',
     name: 'Structure',
     taskCode: '31 00 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Mora Specialty Contractors',
     location: 'Building A',
     progress: 80,
@@ -355,7 +543,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '4.3.1',
     name: 'Column Starter Bars from 1 to 3 floor',
     taskCode: '31 00 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Mora Specialty Contractors',
     location: 'Floors 1-3',
     progress: 100,
@@ -378,7 +566,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '4.4',
     name: 'Roof',
     taskCode: '31 00 00',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Mora Specialty Contractors',
     location: 'Roof',
     progress: 0,
@@ -405,7 +593,7 @@ export const MASTER_SCHEDULE_TASKS: LookaheadTask[] = [
     outline: '5',
     name: 'Masonry & Walling',
     taskCode: '00 01 01',
-    taskType: 'Normal Task',
+    taskType: 'Normal Task', // Elliott Subcontractors
     contractor: 'Farley Structures',
     location: 'Building A',
     progress: 0,

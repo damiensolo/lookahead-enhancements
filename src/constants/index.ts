@@ -10,16 +10,20 @@ export const getDefaultTableColumns = (): Column[] => [
 ];
 
 export const getDefaultLookaheadColumns = (): Column[] => [
-  { id: 'sNo', label: '#', width: '40px', visible: true, minWidth: 20 },
-  { id: 'name', label: 'Task Name', width: '300px', visible: true, minWidth: 100 },
-  { id: 'status', label: 'Status', width: '140px', visible: true, minWidth: 120 },
-  { id: 'taskType', label: 'Task Type', width: '120px', visible: true, minWidth: 40 },
-  { id: 'progress', label: 'Progress', width: '100px', visible: true, minWidth: 80 },
+  { id: 'sNo', label: '#', width: '40px', visible: true, minWidth: 20, hideable: false },
+  { id: 'outline', label: 'Outline', width: '72px', visible: true, minWidth: 48 },
+  { id: 'name', label: 'Task Name', width: '240px', visible: true, minWidth: 100 },
+  { id: 'commitment', label: 'Commitment', width: '120px', visible: true, minWidth: 90 },
+  { id: 'actions', label: 'ACTIONS', width: '140px', visible: true, minWidth: 110 },
+  { id: 'status', label: 'Status', width: '144px', visible: true, minWidth: 120 },
+  { id: 'taskType', label: 'Task Type', width: '120px', visible: false, minWidth: 40 },
+  { id: 'progress', label: 'Progress', width: '160px', visible: true, minWidth: 80 },
   { id: 'planStart', label: 'Start', width: '80px', visible: true, minWidth: 60 },
   { id: 'planEnd', label: 'End', width: '80px', visible: true, minWidth: 60 },
+  { id: 'location', label: 'Location', width: '120px', visible: true, minWidth: 20 },
   { id: 'contractor', label: 'Contractor', width: '180px', visible: true, minWidth: 80 },
   { id: 'crewAssigned', label: 'Crew Assigned', width: '100px', visible: true, minWidth: 40 },
-  { id: 'location', label: 'Location', width: '80px', visible: true, minWidth: 20 },
+  { id: 'quantity', label: 'Qty', width: '112px', visible: true, minWidth: 85 },
 ];
 
 export const FILTERABLE_COLUMNS: { id: ColumnId, label: string, type: 'text' | 'enum' }[] = [

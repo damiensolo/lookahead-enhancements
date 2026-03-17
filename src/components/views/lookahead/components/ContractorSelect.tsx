@@ -117,7 +117,17 @@ const ContractorSelect: React.FC<ContractorSelectProps> = ({
     <div className={`relative ${className}`} ref={containerRef}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setCoords({
+              top: rect.bottom,
+              left: rect.left,
+              width: Math.max(rect.width, 200)
+            });
+          }
+          setIsOpen(!isOpen);
+        }}
         className={`
           flex items-center justify-between w-full text-left transition-all
           ${isMinimal 

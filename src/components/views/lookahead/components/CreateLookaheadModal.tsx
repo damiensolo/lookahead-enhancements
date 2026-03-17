@@ -19,7 +19,7 @@ export const CreateLookaheadModal: React.FC<CreateLookaheadModalProps> = ({
 }) => {
   const [strategy, setStrategy] = useState<'previous' | 'master'>('previous');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [durationWeeks, setDurationWeeks] = useState(2);
+  const [durationWeeks, setDurationWeeks] = useState(3);
 
   if (!isOpen) return null;
 

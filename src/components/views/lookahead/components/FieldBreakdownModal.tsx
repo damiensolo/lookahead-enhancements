@@ -102,8 +102,8 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
               <ListTreeIcon className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-zinc-900">Field Breakdown (FB)</h2>
-              <p className="text-sm text-zinc-500 mt-1">Break down "{parentTask.name}" into manageable sub tasks.</p>
+              <h2 className="text-xl font-bold text-zinc-900">Field Breakdown (FB) for <span className="text-blue-700">{parentTask.name}</span></h2>
+              <p className="text-sm text-zinc-500 mt-1">Responsible Contractor: <span className="font-semibold">{parentTask.contractor}</span></p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-full transition-colors">
@@ -113,16 +113,15 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
 
         <div className="p-6 max-h-[60vh] overflow-y-auto">
           <div className="space-y-4">
-            <div className="grid grid-cols-[32px_1fr_200px_120px_120px_32px] gap-3 px-2 mb-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-              <div className="text-center">#</div>
-              <div>Sub Task Name</div>
-              <div>Responsible Contractor</div>
-              <div>Field Start</div>
-              <div>Field Finish</div>
-              <div></div>
+            <div className="grid grid-cols-[32px_1fr_120px_120px_32px] gap-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+              <div className="flex items-center justify-center">#</div>
+              <div className="flex items-center">Sub Task Name</div>
+              <div className="flex items-center">Field Start</div>
+              <div className="flex items-center">Field Finish</div>
+              <div className="w-8" aria-hidden />
             </div>
             {subTasks.map((st, index) => (
-              <div key={st.id} className="grid grid-cols-[32px_1fr_200px_120px_120px_32px] items-center gap-3 animate-in slide-in-from-left-2 duration-200">
+              <div key={st.id} className="grid grid-cols-[32px_1fr_120px_120px_32px] items-center gap-3 animate-in slide-in-from-left-2 duration-200">
                 <div className="flex-shrink-0 w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-xs font-bold text-zinc-500">
                   {index + 1}
                 </div>
@@ -132,10 +131,6 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
                   onChange={(e) => updateSubTask(st.id, { name: e.target.value })}
                   placeholder="e.g., Set formwork, Pour, Cure time..."
                   className="w-full px-3 py-2 bg-white border border-black/10 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                />
-                <ContractorSelect
-                  value={st.contractor}
-                  onChange={(val) => updateSubTask(st.id, { contractor: val })}
                 />
                 <input
                   type="date"
@@ -182,7 +177,7 @@ export const FieldBreakdownModal: React.FC<FieldBreakdownModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-xl hover:bg-zinc-800 shadow-lg shadow-black/10 transition-all"
+            className="px-6 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-md hover:bg-zinc-800 shadow-md transition-colors"
           >
             Save Breakdown
           </button>

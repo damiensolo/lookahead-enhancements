@@ -158,7 +158,7 @@ export const DeltasModal: React.FC<DeltasModalProps> = ({
           </button>
           <button
             onClick={onPublish}
-            className="px-6 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+            className="px-6 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 shadow-md transition-colors"
           >
             Confirm & Publish
           </button>

@@ -2,7 +2,7 @@ import React, { createContext, useState, useMemo, useCallback, useContext, SetSt
 import { MOCK_TASKS } from '../data';
 import { Task, View, FilterRule, Priority, ColumnId, Status, DisplayDensity, Column, ViewMode } from '../types';
 import { getDefaultTableColumns, getDefaultLookaheadColumns } from '../constants';
-import { LookaheadTask, LookaheadSchedule, ScheduleStatus, TaskDelta } from '../components/views/lookahead/types';
+import { LookaheadTask, LookaheadSchedule, ScheduleStatus, TaskDelta, CommitmentState, ProjectRisk } from '../components/views/lookahead/types';
 import { compareLookaheadTasks } from '../components/views/lookahead/utils/diffUtils';
 import { PLANNER_TASKS, MASTER_SCHEDULE_TASKS } from '../components/views/lookahead/constants';
 import { parseLookaheadDate, addDays, formatDateISO } from '../lib/dateUtils';
@@ -78,6 +78,12 @@ interface ProjectContextType {
   setIsCreateLookaheadModalOpen: (open: boolean) => void;
   isAddTaskModalOpen: boolean;
   setIsAddTaskModalOpen: (open: boolean) => void;
+  // Commitment state (SC net-new tasks; prototype in-memory)
+  commitmentByTaskId: Record<string | number, CommitmentState>;
+  setCommitment: (taskId: string | number, state: Partial<CommitmentState> | null) => void;
+  // Project risks (e.g. when SC rejects with Unanswered RFI)
+  projectRisks: ProjectRisk[];
+  addProjectRisk: (risk: Omit<ProjectRisk, 'addedAt'>) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -108,20 +114,41 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       tasks: PLANNER_TASKS,
       version: 1,
       publishedAt: new Date('2024-11-17').toISOString(),
+      periodStartDate: '2026-01-20',
+      periodDurationDays: 42, // 6 weeks
     }
   ]);
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>('initial-active');
   const [deltas, setDeltas] = useState<Record<string, TaskDelta[]>>({});
   const [isCreateLookaheadModalOpen, setIsCreateLookaheadModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [commitmentByTaskId, setCommitmentByTaskIdState] = useState<Record<string | number, CommitmentState>>({});
+  const [projectRisks, setProjectRisks] = useState<ProjectRisk[]>([]);
+
+  const setCommitment = useCallback((taskId: string | number, state: Partial<CommitmentState> | null) => {
+    setCommitmentByTaskIdState(prev => {
+      if (state === null) {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      }
+      const existing = prev[taskId] || { status: 'pending' as const };
+      return { ...prev, [taskId]: { ...existing, ...state } };
+    });
+  }, []);
+
+  const addProjectRisk = useCallback((risk: Omit<ProjectRisk, 'addedAt'>) => {
+    setProjectRisks(prev => [...prev, { ...risk, addedAt: new Date().toISOString() }]);
+  }, []);
 
   const createDraft = useCallback((strategy: 'previous' | 'master' = 'previous', config?: { startDate: string; durationDays: number }) => {
     const activeSchedule = schedules.find(s => s.status === ScheduleStatus.Active);
     
     let initialTasks: LookaheadTask[] = [];
     const start = config ? new Date(config.startDate) : new Date();
-    const end = config ? addDays(start, config.durationDays) : addDays(start, 14);
-    
+    const periodDays = config ? config.durationDays : 14;
+    const end = config ? addDays(start, periodDays - 1) : addDays(start, periodDays - 1);
+
     if (strategy === 'previous') {
       // Strategy 1: Previous Lookahead
       // Persist changes from previous lookahead, then pull in new tasks from master schedule
@@ -169,6 +196,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       status: ScheduleStatus.Draft,
       tasks: initialTasks,
       version: (activeSchedule?.version || 0) + 1,
+      ...(config && {
+        periodStartDate: config.startDate,
+        periodDurationDays: config.durationDays,
+      }),
     };
     setSchedules(prev => [...prev, newDraft]);
     setActiveScheduleId(newDraft.id);
@@ -403,6 +434,10 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIsCreateLookaheadModalOpen,
     isAddTaskModalOpen,
     setIsAddTaskModalOpen,
+    commitmentByTaskId,
+    setCommitment,
+    projectRisks,
+    addProjectRisk,
   };
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

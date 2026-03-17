@@ -1,12 +1,12 @@
 import { LookaheadTask, TaskDelta } from '../types';
+import { getTotalPlannedQuantity } from './quantityUtils';
 
 /**
- * Calculates the total planned quantity for a task across its daily metrics.
+ * Calculates the total planned quantity for a task.
+ * @deprecated Use getTotalPlannedQuantity from quantityUtils
  */
-export const calculateTotalPlannedQuantity = (task: LookaheadTask): number => {
-  if (!task.dailyMetrics) return 0;
-  return task.dailyMetrics.reduce((sum, metric) => sum + (metric.quantity.plan || 0), 0);
-};
+export const calculateTotalPlannedQuantity = (task: LookaheadTask): number =>
+  getTotalPlannedQuantity(task);
 
 /**
  * Compares two sets of lookahead tasks and returns the differences (deltas).

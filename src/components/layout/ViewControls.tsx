@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { View, ViewMode } from '../../types';
 import { useProject } from '../../context/ProjectContext';
 import FilterMenu from './FilterMenu';
-import ViewSettingsMenu from './ViewSettingsMenu';
 import { PlusIcon, MoreHorizontalIcon, TableIcon, BoardIcon, GanttIcon, LookaheadIcon, SearchIcon, FilterIcon, SpreadsheetIcon, DashboardIcon } from '../common/Icons';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../common/ui/Tooltip';
 
@@ -105,7 +104,12 @@ const TabMenu: React.FC<{ view: View, isDefault: boolean, onRename: () => void, 
   );
 };
 
-const ViewControls: React.FC = () => {
+interface ViewControlsProps {
+  /** Rendered before the search field when present; a pipe "|" is shown between this and the search (e.g. left panel toggle in lookahead) */
+  renderBeforeSearch?: React.ReactNode;
+}
+
+const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch }) => {
   const {
     views, activeViewId, defaultViewId, handleSelectView, setModalState, handleDeleteView, setDefaultViewId, setViews,
     activeViewMode, handleViewModeChange,
@@ -148,6 +152,12 @@ const ViewControls: React.FC = () => {
     <div className="flex items-center gap-3">
         {showSearchAndFilter && (
             <>
+                {renderBeforeSearch != null && (
+                    <>
+                        {renderBeforeSearch}
+                        <span className="text-gray-300 select-none" aria-hidden="true">|</span>
+                    </>
+                )}
                 {/* Search */}
                 <div className="relative">
                     <SearchIcon className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-opacity duration-200 ${isSearchFocused ? 'opacity-0' : 'opacity-100'}`} />
@@ -171,10 +181,6 @@ const ViewControls: React.FC = () => {
                     </button>
                     {showFilterMenu && <FilterMenu onClose={() => setShowFilterMenu(false)} />}
                 </div>
-
-                <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                <ViewSettingsMenu />
-                <div className="h-6 w-px bg-gray-300 mx-1"></div>
             </>
         )}
 

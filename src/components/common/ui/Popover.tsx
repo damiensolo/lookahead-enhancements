@@ -88,7 +88,28 @@ export const Popover: React.FC<PopoverProps> = ({
 
   return (
     <>
-      <div ref={triggerRef} onClick={() => setOpen(!isOpen)} className="inline-block w-full">
+      <div
+        ref={triggerRef}
+        onClick={() => {
+          const nextOpen = !isOpen;
+          if (nextOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            let left = rect.left;
+            if (align === 'center') {
+              left = rect.left + rect.width / 2;
+            } else if (align === 'end') {
+              left = rect.right;
+            }
+            setCoords({
+              top: rect.bottom + sideOffset,
+              left,
+              width: rect.width
+            });
+          }
+          setOpen(nextOpen);
+        }}
+        className="inline-block w-full"
+      >
         {trigger}
       </div>
       {isOpen && createPortal(

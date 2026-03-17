@@ -1,19 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS } from '../types';
-import { XIcon, PlusIcon, AlertTriangleIcon } from '../../../common/Icons';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS, TaskDelta, CommitmentState, ProjectRisk } from '../types';
+import { getEffectiveDailyMetrics, getTotalPlannedQuantity, getTotalActualQuantity, getQuantityUnit, ensureProductionQuantity, formatQuantityDisplay, getMaxActualForDay } from '../utils/quantityUtils';
+import { XIcon, PlusIcon, AlertTriangleIcon, HardHatIcon } from '../../../common/Icons';
 import ManHoursBar from './ManHoursBar';
 import ContractorSelect from './ContractorSelect';
+import ProgressSlider from './ProgressSlider';
 import { formatDisplayDate } from '../../../../lib/dateUtils';
 
 
 interface LookaheadDetailsPanelProps {
   task: LookaheadTask | null;
+  taskDelta?: TaskDelta;
   onClose: () => void;
   onAddConstraint: (taskId: string | number, constraint: Constraint) => void;
   onUpdateProgress?: (taskId: string | number, progress: number) => void;
   onUpdateContractor?: (taskId: string | number, contractor: string) => void;
+  onUpdatePlannedQuantity?: (taskId: string | number, planned: number, unit: string) => void;
+  onUpdateDailyQuantity?: (taskId: string | number, date: string, plan: number, actual: number) => void;
+  /** Open Add Crew modal for this task (taskId, dateString) */
+  onOpenAddCrew?: (taskId: string | number, dateString: string) => void;
+  /** When true (lookahead in draft mode), quantity fields are editable */
+  isDraft?: boolean;
+  /** When true (closed lookahead), entire panel is read-only - no edits */
+  isReadOnly?: boolean;
+  /** When true, render content only (no aside wrapper) for use inside unified panel */
+  embedded?: boolean;
+  /** SC commitment state for this task (when persona is SC and task is net-new) */
+  commitment?: CommitmentState | null;
+  /** True when this task was added in last publish and belongs to SC company */
+  isNetNew?: boolean;
+  /** Update commitment state (SC net-new workflow) */
+  onSetCommitment?: (state: Partial<CommitmentState>) => void;
+  /** Persona for GC/SC demo */
+  persona?: 'gc' | 'sc';
+  /** When SC rejects with Unanswered RFI, add to project risks */
+  addProjectRisk?: (risk: Omit<ProjectRisk, 'addedAt'>) => void;
+  /** Open the commitment modal (SC net-new workflow) */
+  onOpenCommitmentModal?: () => void;
+  /** True when this task is a root-level task (not a field breakdown child); commitment only applies to top-level */
+  isTopLevelTask?: boolean;
 }
 
 const getStatusDot = (status: ConstraintStatus) => {
@@ -47,7 +73,10 @@ const getStatusClasses = (status: ConstraintStatus): { text: string; bg: string;
   }
 };
 
-const getOverallStatusInfo = (constraints: Constraint[]): { label: string; dotColor: string; textColor: string } => {
+const getOverallStatusInfo = (constraints: Constraint[], progress?: number): { label: string; dotColor: string; textColor: string } => {
+  if (progress !== undefined && progress >= 100) {
+    return { label: 'Complete', dotColor: 'bg-emerald-600', textColor: 'text-emerald-700' };
+  }
   if (constraints.some(c => c.status === ConstraintStatus.Overdue || c.severity === 'Blocking')) {
     return { label: 'Blocked', dotColor: 'bg-red-500', textColor: 'text-red-700' };
   }
@@ -81,10 +110,10 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
             <h4 className="text-sm font-semibold text-gray-700 mb-3">Flag New Constraint</h4>
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                    <select value={type} onChange={e => setType(e.target.value as ConstraintType)} className="form-select w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <select value={type} onChange={e => setType(e.target.value as ConstraintType)} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         {Object.values(ConstraintType).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <select value={severity} onChange={e => setSeverity(e.target.value as 'Blocking' | 'Warning')} className="form-select w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
+                    <select value={severity} onChange={e => setSeverity(e.target.value as 'Blocking' | 'Warning')} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="Warning">Warning</option>
                         <option value="Blocking">Blocking</option>
                     </select>
@@ -93,7 +122,7 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     placeholder="Description (e.g., Material delivery delayed)"
-                    className="form-textarea w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows={2}
                 />
             </div>
@@ -106,46 +135,36 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
 };
 
 
-const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, taskDelta, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor, onUpdatePlannedQuantity, onUpdateDailyQuantity, onOpenAddCrew, isDraft = true, isReadOnly = false, embedded = false, commitment, isNetNew, isTopLevelTask = true, onSetCommitment, persona, addProjectRisk, onOpenCommitmentModal }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const [plannedInputValue, setPlannedInputValue] = useState('');
 
   useEffect(() => {
-    setIsOpen(!!task);
-    setIsAdding(false); // Reset form on new task
+    if (task) setIsAdding(false);
   }, [task]);
-  
-  const handleClose = () => {
-    setIsOpen(false);
-    setTimeout(onClose, 300); // Allow for transition
-  };
-  
-  const overallStatus = task ? getOverallStatusInfo(task.constraints) : null;
 
-  return (
-    <aside
-      className={`absolute top-0 right-0 h-full bg-white border-l border-gray-200 z-50 transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}
-      style={{ width: '400px' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="lookahead-details-title"
-    >
-      {task && overallStatus && (
+  useEffect(() => {
+    if (task) {
+      const pq = getTotalPlannedQuantity(task);
+      setPlannedInputValue(pq > 0 ? String(pq) : '');
+    } else {
+      setPlannedInputValue('');
+    }
+  }, [task?.id]);
+  
+  const overallStatus = task ? getOverallStatusInfo(task.constraints, task.progress) : null;
+  const content = task && overallStatus ? (
         <div className="flex flex-col h-full">
           <header className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
             <h2 id="lookahead-details-title" className="text-lg font-semibold text-gray-800 truncate">{task.name}</h2>
-            <button onClick={handleClose} className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800" aria-label="Close details">
+            <button onClick={onClose} className="p-1 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800" aria-label="Close details">
               <XIcon className="w-5 h-5" />
             </button>
           </header>
           <div className="flex-grow p-6 overflow-y-auto">
 
-            {/* Summary Section */}
             <div className="mb-8">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Summary</h3>
-              <div className="p-4 bg-gray-50 rounded-lg space-y-4">
+              <div className="px-4 py-0 bg-gray-50 rounded-lg space-y-4">
                 {task.isCriticalPath && (
                   <div className="flex items-center gap-2 p-2 rounded-md bg-red-100 text-red-700 border border-red-200">
                     <AlertTriangleIcon className="w-5 h-5" />
@@ -168,10 +187,10 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                     </div>
                     <div>
                         <div className="text-xs text-gray-500 mb-1">Contractor</div>
-                        {task.taskType === 'Field Task' ? (
+                        {task.taskType === 'Field Task' && onUpdateContractor ? (
                             <ContractorSelect
                                 value={task.contractor}
-                                onChange={(val) => onUpdateContractor?.(task.id, val)}
+                                onChange={(val) => onUpdateContractor(task.id, val)}
                             />
                         ) : (
                             <div className="font-semibold text-gray-800 text-sm px-1">{task.contractor}</div>
@@ -179,7 +198,22 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                     </div>
                     <div>
                         <div className="text-xs text-gray-500">Crew Assigned</div>
-                        <div className="font-semibold text-gray-800 text-sm">{task.crewAssigned}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-800 text-sm">
+                                {task.assignedCrewByDate?.[task.startDate]?.length ?? task.crewAssigned}
+                            </span>
+                            {onOpenAddCrew && (
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenAddCrew(task.id, task.startDate)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 bg-transparent border border-transparent rounded-md hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                    title="Add Crew"
+                                >
+                                    <HardHatIcon className="w-4 h-4" />
+                                    Add Crew
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div>
                         <div className="text-xs text-gray-500">Overall Health</div>
@@ -188,6 +222,18 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                             <span>{overallStatus.label}</span>
                         </div>
                     </div>
+                    {taskDelta && (
+                        <div>
+                            <div className="text-xs text-gray-500">Change from last publish</div>
+                            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                                taskDelta.type === 'added' ? 'bg-green-100 text-green-600' : 
+                                taskDelta.type === 'modified' ? 'bg-blue-100 text-blue-600' : 
+                                'bg-red-100 text-red-600'
+                            }`}>
+                                {taskDelta.type}
+                            </span>
+                        </div>
+                    )}
                     <div className="col-span-2">
                         <div className="text-xs text-gray-500 mb-1">Schedule Analysis</div>
                         <div className="space-y-2">
@@ -216,76 +262,34 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                 <div className="mb-6">
                     <div className="flex justify-between items-center mb-3">
                         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Task Progress</span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-blue-600">{task.progress}%</span>
-                            {task.taskType === 'Field Task' && (
-                                <div className="flex bg-gray-100 rounded-lg p-0.5">
-                                    <button 
-                                        onClick={() => onUpdateProgress?.(task.id, Math.max(0, task.progress - 5))}
-                                        className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-gray-500"
-                                    >
-                                        <ChevronDown className="w-3 h-3" />
-                                    </button>
-                                    <button 
-                                        onClick={() => onUpdateProgress?.(task.id, Math.min(100, task.progress + 5))}
-                                        className="p-1 hover:bg-white hover:shadow-sm rounded transition-all text-gray-500"
-                                    >
-                                        <ChevronUp className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <span className="text-lg font-bold text-blue-600">{task.progress}%</span>
                     </div>
-                    
-                    {task.taskType === 'Field Task' && onUpdateProgress ? (
-                        <div className="space-y-6 px-2">
-                            <div className="relative h-8 flex items-center">
-                                <input 
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    step="1"
-                                    value={task.progress}
-                                    onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
-                                    className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600 z-10"
-                                />
-                                <div className="absolute inset-0 flex justify-between pointer-events-none translate-y-4">
-                                    {[0, 25, 50, 75, 100].map(p => (
-                                        <div key={p} className="flex flex-col items-center">
-                                            <div className="h-1.5 w-0.5 bg-gray-300 mb-0.5" />
-                                            <span className="text-[8px] font-bold text-gray-400">{p}%</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-5 gap-2">
-                                {[0, 25, 50, 75, 100].map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => onUpdateProgress(task.id, p)}
-                                        className={`
-                                            py-1.5 rounded-lg text-[10px] font-bold transition-all
-                                            ${task.progress === p 
-                                                ? 'bg-blue-600 text-white shadow-md' 
-                                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                                            }
-                                        `}
-                                    >
-                                        {p}%
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                            <motion.div 
-                                initial={{ width: 0 }}
-                                animate={{ width: `${task.progress}%` }}
-                                className="h-full bg-blue-500"
+                    {(() => {
+                        const hasSubTasks = task.children && task.children.length > 0;
+                        const isEditable = !hasSubTasks && onUpdateProgress;
+                        return isEditable ? (
+                        <div className="px-2 py-1">
+                            <ProgressSlider
+                                value={task.progress}
+                                onChange={(v) => onUpdateProgress(task.id, v)}
+                                size="md"
                             />
                         </div>
-                    )}
+                        ) : (
+                        <div>
+                            <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${task.progress}%` }}
+                                    className="h-full bg-blue-500"
+                                />
+                            </div>
+                            {hasSubTasks && (
+                                <p className="text-xs text-gray-500 mt-1">Calculated from sub-tasks</p>
+                            )}
+                        </div>
+                        );
+                    })()}
                 </div>
 
                 <div className="mb-6">
@@ -294,12 +298,188 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                     </div>
                     <ManHoursBar manHours={task.manHours} />
                 </div>
+
+                {/* Production Quantities & Daily Tracking */}
+                <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 pt-6">Production Quantities</h3>
+                    <div className="px-4 py-0 bg-gray-50 rounded-lg space-y-4">
+                        {/* Planned and Actual: editable rows in draft, side-by-side in read view */}
+                        {isDraft ? (
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Planned Qty</label>
+                                <div className="flex gap-2 w-full min-w-0">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        value={plannedInputValue}
+                                        onChange={(e) => {
+                                            const raw = e.target.value;
+                                            setPlannedInputValue(raw);
+                                            const v = parseFloat(raw);
+                                            if (onUpdatePlannedQuantity && (raw === '' || (!isNaN(v) && v >= 0))) {
+                                                onUpdatePlannedQuantity(task.id, raw === '' ? 0 : v, getQuantityUnit(task));
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            const v = parseFloat(plannedInputValue);
+                                            if (isNaN(v) || v < 0) setPlannedInputValue(getTotalPlannedQuantity(task) > 0 ? String(getTotalPlannedQuantity(task)) : '');
+                                        }}
+                                        placeholder="Enter planned"
+                                        className="flex-1 min-w-0 w-24 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    <select
+                                        value={getQuantityUnit(task)}
+                                        onChange={(e) => onUpdatePlannedQuantity?.(task.id, parseFloat(plannedInputValue) || getTotalPlannedQuantity(task) || 0, e.target.value)}
+                                        className="flex-shrink-0 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        {['EA', 'CY', 'LF', 'SF', 'TON', 'CF'].map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {onUpdatePlannedQuantity && getTotalPlannedQuantity(task) > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onUpdatePlannedQuantity(task.id, getTotalPlannedQuantity(task), getQuantityUnit(task))}
+                                        className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
+                                    >
+                                        Evenly distribute
+                                    </button>
+                                )}
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Actual Qty</label>
+                                    <div className="font-semibold text-blue-700 px-3 py-2 bg-white rounded-md border border-gray-200">
+                                        {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Planned Qty</label>
+                                    <div className="font-semibold text-gray-800 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
+                                        {formatQuantityDisplay(getTotalPlannedQuantity(task))} {getQuantityUnit(task)}
+                                        {task.productionQuantity?.plannedLocked && (
+                                            <span className="ml-1 text-[10px] text-amber-600 font-normal">(locked)</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Actual Qty</label>
+                                    <div className="font-semibold text-blue-700 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
+                                        {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Daily Plan vs Actual</label>
+                            <div className="rounded border border-gray-200 bg-white overflow-hidden">
+                                {getEffectiveDailyMetrics(task).length === 0 ? (
+                                    <p className="text-xs text-gray-500 py-6 px-4 text-center">No daily data. Enter planned qty to distribute.</p>
+                                ) : (
+                                    <div className="overflow-y-auto overflow-x-hidden max-h-44">
+                                        <table className="w-full text-xs border-collapse" style={{ tableLayout: 'fixed' }}>
+                                            <colgroup>
+                                                <col style={{ width: '38%' }} />
+                                                <col style={{ width: '31%' }} />
+                                                <col style={{ width: '31%' }} />
+                                            </colgroup>
+                                            <thead className="bg-gray-50 sticky top-0">
+                                                <tr>
+                                                    <th className="text-left px-2 py-2 font-semibold text-gray-600">Date</th>
+                                                    <th className="text-right px-1 py-2 font-semibold text-gray-600">Plan</th>
+                                                    <th className="text-right px-1 py-2 font-semibold text-gray-600">Actual</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {getEffectiveDailyMetrics(task).map((m) => {
+                                                    const planVal = m.quantity?.plan ?? 0;
+                                                    const actualVal = m.quantity?.actual ?? 0;
+                                                    const canEdit = isDraft && onUpdateDailyQuantity;
+                                                    return (
+                                                        <tr key={m.date} className="border-t border-gray-100">
+                                                            <td className="px-2 py-1 text-gray-700 truncate align-middle" title={formatDisplayDate(m.date)}>{formatDisplayDate(m.date)}</td>
+                                                            <td className="px-1 py-1 text-right align-middle">
+                                                                {canEdit ? (
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        step={0.01}
+                                                                        value={planVal}
+                                                                        onChange={(e) => {
+                                                                            const v = parseFloat(e.target.value);
+                                                                            if (!isNaN(v) && v >= 0) onUpdateDailyQuantity(task.id, m.date, v, actualVal);
+                                                                        }}
+                                                                        className="w-full max-w-full min-w-0 py-1 px-1.5 text-right text-xs border border-gray-300 rounded box-border"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-gray-600">{formatQuantityDisplay(planVal)}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-1 py-1 text-right align-middle">
+                                                                {canEdit ? (
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        max={getMaxActualForDay(task, m.date)}
+                                                                        step={0.01}
+                                                                        value={actualVal}
+                                                                        onChange={(e) => {
+                                                                            const v = parseFloat(e.target.value);
+                                                                            if (!isNaN(v) && v >= 0) onUpdateDailyQuantity(task.id, m.date, planVal, v);
+                                                                        }}
+                                                                        className="w-full max-w-full min-w-0 py-1 px-1.5 text-right text-xs border border-gray-300 rounded box-border font-medium text-blue-700"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="font-medium text-blue-700">{formatQuantityDisplay(actualVal)}</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
               </div>
             </div>
 
-            {/* Make-Ready Checklist Section */}
+            {/* Commitment summary (SC): only for top-level tasks; field breakdown children are created by SC and do not require commit */}
+            {persona === 'sc' && task && isTopLevelTask && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Commitment</h3>
+                <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {(!commitment || commitment.status === 'pending') && isNetNew ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-gray-600">Commit required for this task.</p>
+                      <button
+                        type="button"
+                        onClick={onOpenCommitmentModal}
+                        className="px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-full"
+                      >
+                        Commit
+                      </button>
+                    </div>
+                  ) : commitment?.status === 'committed' ? (
+                    <p className="text-sm text-green-700 font-medium">Committed{commitment.committedAt ? ` at ${new Date(commitment.committedAt).toLocaleString()}` : ''}.</p>
+                  ) : commitment?.status === 'proposed' ? (
+                    <p className="text-sm text-blue-700">Proposed dates: {commitment.proposedStartDate} – {commitment.proposedFinishDate}</p>
+                  ) : commitment?.status === 'rejected' ? (
+                    <p className="text-sm text-red-700">Rejected: {commitment.rejectionReason}{commitment.rejectionComment ? ` – ${commitment.rejectionComment}` : ''}{commitment.rejectedAt ? ` at ${new Date(commitment.rejectedAt).toLocaleString()}` : ''}</p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {/* Constraints Section */}
             <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Make-Ready Checklist</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Constraints</h3>
                 <ul className="space-y-3">
                   {task.constraints.length > 0 ? task.constraints.map((constraint, i) => {
                     const statusClasses = getStatusClasses(constraint.status);
@@ -328,18 +508,23 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, onC
                   )}
                 </ul>
 
-                {isAdding ? (
-                     <AddConstraintForm onAdd={(c) => { onAddConstraint(task.id, c); setIsAdding(false); }} onCancel={() => setIsAdding(false)} />
-                ) : (
+                {!isReadOnly && (isAdding ? (
+                     <AddConstraintForm onAdd={(c) => { onAddConstraint?.(task.id, c); setIsAdding(false); }} onCancel={() => setIsAdding(false)} />
+                ) : onAddConstraint ? (
                     <button onClick={() => setIsAdding(true)} className="mt-4 flex items-center gap-1.5 text-sm text-blue-600 font-medium p-2 hover:bg-blue-50 rounded-md w-full justify-center border-2 border-dashed border-gray-300 hover:border-blue-300">
                         <PlusIcon className="w-4 h-4" />
                         Flag a Constraint
                     </button>
-                )}
+                ) : null)}
             </div>
           </div>
         </div>
-      )}
+  ) : null;
+
+  if (embedded) return content;
+  return (
+    <aside className="absolute top-0 right-0 h-full bg-white border-l border-gray-200 z-50" style={{ width: '420px' }} role="dialog" aria-modal="true" aria-labelledby="lookahead-details-title">
+      {content}
     </aside>
   );
 };

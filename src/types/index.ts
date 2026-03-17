@@ -68,6 +68,8 @@ export interface Column {
   width?: string;
   visible: boolean;
   minWidth?: number;
+  /** If false, column cannot be hidden from view settings (e.g. lookahead # column). */
+  hideable?: boolean;
 }
 
 export type DisplayDensity = 'compact' | 'standard' | 'comfortable';

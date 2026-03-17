@@ -12,7 +12,10 @@ const getSegmentColor = (status: ConstraintStatus): string => {
   }
 };
 
-const getOverallStatusInfo = (status: LookaheadStatus): { label: string; dotColor: string } => {
+const getOverallStatusInfo = (status: LookaheadStatus, progress?: number): { label: string; dotColor: string } => {
+  if (progress !== undefined && progress >= 100) {
+    return { label: 'Complete', dotColor: 'bg-blue-600' };
+  }
   const statuses = Object.values(status);
   if (statuses.includes(ConstraintStatus.Overdue)) {
     return { label: 'Blocked', dotColor: 'bg-red-500' };
@@ -23,8 +26,8 @@ const getOverallStatusInfo = (status: LookaheadStatus): { label: string; dotColo
   return { label: 'Ready', dotColor: 'bg-green-500' };
 };
 
-const ConstraintBadge: React.FC<{ status: LookaheadStatus, onClick: () => void }> = ({ status, onClick }) => {
-  const overall = getOverallStatusInfo(status);
+const ConstraintBadge: React.FC<{ status: LookaheadStatus; progress?: number; onClick: () => void }> = ({ status, progress, onClick }) => {
+  const overall = getOverallStatusInfo(status, progress);
   const constraintOrder: ConstraintType[] = [ConstraintType.Predecessor, ConstraintType.RFI, ConstraintType.Submittal, ConstraintType.Material];
 
   return (

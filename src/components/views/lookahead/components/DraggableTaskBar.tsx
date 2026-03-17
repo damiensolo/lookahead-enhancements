@@ -6,23 +6,30 @@ import { addDays, formatDateISO, getDaysDiff, parseLookaheadDate, formatDisplayD
 interface DraggableTaskBarProps {
     task: LookaheadTask;
     projectStartDate: Date;
+    projectEndDate: Date;
     dayWidth: number;
     onUpdateTask: (taskId: string | number, newStart: string, newFinish: string) => void;
     onDayClick: (task: LookaheadTask, date: Date) => void;
     offsetLeft?: number;
+    /** When true, dragging and resizing are disabled (e.g. closed lookahead) */
+    disabled?: boolean;
 }
 
-const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0 }) => {
+const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, projectEndDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0, disabled = false }) => {
     const [dragState, setDragState] = useState<{
         type: 'move' | 'resize-left' | 'resize-right';
         startX: number;
         originalTask: LookaheadTask;
     } | null>(null);
-    
+
+    // Guard against undefined dates (e.g. when creating a new lookahead before state is ready)
+    const windowStart = projectStartDate ?? new Date();
+    const windowEnd = projectEndDate ?? new Date();
+
     const isFieldTask = task.taskType === 'Field Task';
     const isCritical = !!task.isCriticalPath;
-    
-    // Enhanced Color Logic: 
+
+    // Enhanced Color Logic:
     // Main Tasks: Neutral/Slate (Fixed)
     // Field Tasks: Blue/Indigo (Editable)
     // Critical Path: Red/Rose
@@ -54,15 +61,20 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
     const planStart = parseLookaheadDate(task.startDate);
     const planEnd = parseLookaheadDate(task.finishDate);
 
-    const offsetDays = getDaysDiff(projectStartDate, taskStart);
-    const durationDays = getDaysDiff(taskStart, taskEnd) + 1;
+    // Clip to visible lookahead window; avoid early return so hooks run consistently
+    const isOutsideWindow = taskEnd < windowStart || taskStart > windowEnd;
+    const visibleStart = isOutsideWindow ? windowStart : (taskStart >= windowStart ? taskStart : new Date(windowStart.getTime()));
+    const visibleEnd = isOutsideWindow ? windowStart : (taskEnd <= windowEnd ? taskEnd : new Date(windowEnd.getTime()));
+
+    const offsetDays = getDaysDiff(windowStart, visibleStart);
+    const durationDays = isOutsideWindow ? 0 : getDaysDiff(visibleStart, visibleEnd) + 1;
     const displayProgressPercent = Math.min(100, task.progress);
 
     const hasMasterRange = !!(task.masterStartDate && task.masterFinishDate);
     const hasFieldDates = !!(task.fieldStartDate && task.fieldFinishDate);
 
     const handleMouseDown = (e: React.MouseEvent, type: 'move' | 'resize-left' | 'resize-right') => {
-        if (!isFieldTask) return; // Only field tasks can be edited
+        if (!isFieldTask || disabled) return; // Only field tasks can be edited; disabled when closed
         
         e.preventDefault();
         e.stopPropagation();
@@ -141,11 +153,13 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
 
     const barWidth = durationDays * dayWidth;
 
-    // Planned Range Indicator (Baseline)
+    // Planned Range Indicator (Baseline) - clamped to visible window
     const plannedIndicator = useMemo(() => {
-        const pOffset = getDaysDiff(projectStartDate, planStart);
-        const pDuration = getDaysDiff(planStart, planEnd) + 1;
-        
+        const pStart = planStart >= windowStart ? planStart : new Date(windowStart.getTime());
+        const pEnd = planEnd <= windowEnd ? planEnd : new Date(windowEnd.getTime());
+        if (pStart > pEnd) return null;
+        const pOffset = getDaysDiff(windowStart, pStart);
+        const pDuration = getDaysDiff(pStart, pEnd) + 1;
         return (
             <div 
                 className="absolute -top-[3px] h-[2px] bg-zinc-200 rounded-full overflow-hidden"
@@ -155,16 +169,18 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 }}
             />
         );
-    }, [planStart, planEnd, projectStartDate, offsetDays, dayWidth]);
+    }, [planStart, planEnd, windowStart, windowEnd, offsetDays, dayWidth]);
 
-    // Master Range Indicator
+    // Master Range Indicator - clamped to visible window
     const masterIndicator = useMemo(() => {
         if (!hasMasterRange) return null;
         const mStart = parseLookaheadDate(task.masterStartDate!);
         const mFinish = parseLookaheadDate(task.masterFinishDate!);
-        const mOffset = getDaysDiff(projectStartDate, mStart);
-        const mDuration = getDaysDiff(mStart, mFinish) + 1;
-        
+        if (mFinish < windowStart || mStart > windowEnd) return null;
+        const mStartClamp = mStart >= windowStart ? mStart : new Date(windowStart.getTime());
+        const mEndClamp = mFinish <= windowEnd ? mFinish : new Date(windowEnd.getTime());
+        const mOffset = getDaysDiff(windowStart, mStartClamp);
+        const mDuration = getDaysDiff(mStartClamp, mEndClamp) + 1;
         return (
             <div 
                 className="absolute -top-[8px] h-1 bg-amber-400/40 rounded-full overflow-hidden border border-amber-500/10"
@@ -176,18 +192,20 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(245,158,11,0.6)_4px,rgba(245,158,11,0.6)_8px)]" />
             </div>
         );
-    }, [hasMasterRange, task.masterStartDate, task.masterFinishDate, projectStartDate, offsetDays, dayWidth]);
+    }, [hasMasterRange, task.masterStartDate, task.masterFinishDate, windowStart, windowEnd, offsetDays, dayWidth]);
+
+    if (isOutsideWindow) return null;
 
     return (
         <div 
             className={`absolute top-[7px] bottom-[5px] group overflow-visible
                 ${styles.wrapper}
-                ${isFieldTask ? (dragState?.type === 'move' ? 'cursor-grabbing opacity-80 z-30' : 'cursor-grab') : 'cursor-default'}`}
+                ${disabled ? 'cursor-default' : isFieldTask ? (dragState?.type === 'move' ? 'cursor-grabbing opacity-80 z-30' : 'cursor-grab') : 'cursor-default'}`}
             style={{ 
                 left: `${(offsetDays * dayWidth) + offsetLeft}px`, 
                 width: `${barWidth}px`,
             }}
-            onMouseDown={(e) => isFieldTask && handleMouseDown(e, 'move')}
+            onMouseDown={(e) => isFieldTask && !disabled && handleMouseDown(e, 'move')}
             title={`${task.name}: ${formatDisplayDate(task.fieldStartDate || task.startDate)} to ${formatDisplayDate(task.fieldFinishDate || task.finishDate)}${hasMasterRange ? ` (Master: ${formatDisplayDate(task.masterStartDate!)} to ${formatDisplayDate(task.masterFinishDate!)})` : ''}`}
         >
             {masterIndicator}
@@ -195,7 +213,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
             
             <div className="flex h-full relative z-10">
                 {Array.from({ length: durationDays }).map((_, i) => {
-                    const dayDate = addDays(taskStart, i);
+                    const dayDate = addDays(visibleStart, i);
                     const dayProgress = Math.min(100, Math.max(0, (task.progress - (i / durationDays * 100)) * durationDays));
                     
                     return (
@@ -218,7 +236,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                                 />
                                 
                                 {/* Drag Handle Indicator (only on first square) */}
-                                {isFieldTask && i === 0 && (
+                                {isFieldTask && !disabled && i === 0 && (
                                     <div className="absolute left-0.5 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
                                         <div className="w-1.5 h-0.5 bg-current rounded-full" />
                                         <div className="w-1.5 h-0.5 bg-current rounded-full" />
@@ -230,7 +248,9 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 })}
             </div>
             
-            {/* Resize Handles */}
+            {/* Resize Handles - hidden when disabled */}
+            {!disabled && (
+            <>
             <div 
                 className="absolute left-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 z-20"
                 style={{transform: 'translateX(-50%)'}}
@@ -241,6 +261,8 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                 style={{transform: 'translateX(50%)'}}
                 onMouseDown={(e) => handleMouseDown(e, 'resize-right')}
             />
+            </>
+            )}
         </div>
     );
 };

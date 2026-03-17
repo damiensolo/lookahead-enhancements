@@ -1,0 +1,12 @@
+/* Override browser default focus (orange) with blue/black */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgb(59 130 246);
+  outline-offset: 2px;
+}
