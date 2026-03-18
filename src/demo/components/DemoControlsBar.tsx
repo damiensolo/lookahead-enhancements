@@ -55,22 +55,29 @@ export const DemoControlsBar: React.FC<{
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [isAutoRunning, setIsAutoRunning] = useState(false);
+  const [autoRunStep, setAutoRunStep] = useState('');
   const abortRef = useRef(false);
 
   const runAuto = async () => {
     setIsAutoRunning(true);
     abortRef.current = false;
     try {
+      setAutoRunStep('Resetting demo…');
       resetDemo();
       await sleep(600);
       if (abortRef.current) return;
+
+      setAutoRunStep('GC reviewing draft…');
       setActiveRole('gc');
       await sleep(800);
       if (abortRef.current) return;
+
+      setAutoRunStep('GC submitting for review…');
       submitForReview();
       await sleep(1200);
       if (abortRef.current) return;
 
+      setAutoRunStep('Apex Electrical responding…');
       setActiveRole('apex-electrical');
       await sleep(900);
       if (abortRef.current) return;
@@ -80,6 +87,7 @@ export const DemoControlsBar: React.FC<{
       await sleep(700);
       commitTask('task-7', 'apex-electrical');
       await sleep(700);
+      setAutoRunStep('Apex proposing adjustment on task 3…');
       proposeAdjustment('task-3', 'apex-electrical', {
         proposedStartDate: 'Apr 15',
         proposedEndDate: 'Apr 17',
@@ -89,6 +97,7 @@ export const DemoControlsBar: React.FC<{
       await sleep(1200);
       if (abortRef.current) return;
 
+      setAutoRunStep('BlueLine Mechanical responding…');
       setActiveRole('blueline-mechanical');
       await sleep(900);
       if (abortRef.current) return;
@@ -98,10 +107,12 @@ export const DemoControlsBar: React.FC<{
       await sleep(700);
       commitTask('task-8', 'blueline-mechanical');
       await sleep(700);
+      setAutoRunStep('BlueLine rejecting task 6…');
       rejectTask('task-6', 'blueline-mechanical', 'Commissioning tech unavailable Apr 15–17', 'Request reschedule to following week.');
       await sleep(1200);
       if (abortRef.current) return;
 
+      setAutoRunStep('GC accepting adjustment, counter-proposing…');
       setActiveRole('gc');
       await sleep(900);
       gcAcceptAdjustment('task-3');
@@ -115,16 +126,19 @@ export const DemoControlsBar: React.FC<{
       await sleep(1200);
       if (abortRef.current) return;
 
+      setAutoRunStep('BlueLine committing to revised task 6…');
       setActiveRole('blueline-mechanical');
       await sleep(900);
       commitTask('task-6', 'blueline-mechanical');
       await sleep(900);
       if (abortRef.current) return;
 
+      setAutoRunStep('GC publishing lookahead…');
       setActiveRole('gc');
       await sleep(800);
       publishLookahead();
       await sleep(800);
+      setAutoRunStep('Done!');
     } finally {
       setIsAutoRunning(false);
     }
@@ -135,7 +149,15 @@ export const DemoControlsBar: React.FC<{
       <div className="fixed bottom-0 left-0 right-0 z-[220] border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] text-slate-400">State: <span className="text-slate-200 font-semibold">{lookaheadStatus}</span></div>
+            <div className="text-[11px] text-slate-400">
+              State: <span className="text-slate-200 font-semibold">{lookaheadStatus}</span>
+              {isAutoRunning && autoRunStep && (
+                <span className="ml-2 inline-flex items-center gap-1 text-emerald-300">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {autoRunStep}
+                </span>
+              )}
+            </div>
             <div className="text-xs text-slate-300 truncate">{summary || `${tasks.length} tasks`}</div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">

@@ -17,9 +17,11 @@ interface DraggableTaskBarProps {
     bufferDaysBefore?: number;
     /** Number of days in the active lookahead period (excludes buffer) */
     periodDurationDays?: number;
+    /** The currently selected date for this task's row, if any */
+    selectedDate?: Date | null;
 }
 
-const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, projectEndDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0, disabled = false, bufferDaysBefore = 0, periodDurationDays = Infinity }) => {
+const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartDate, projectEndDate, dayWidth, onUpdateTask, onDayClick, offsetLeft = 0, disabled = false, bufferDaysBefore = 0, periodDurationDays = Infinity, selectedDate }) => {
     const [dragState, setDragState] = useState<{
         type: 'move' | 'resize-left' | 'resize-right';
         startX: number;
@@ -269,6 +271,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                     const dayDate = addDays(visibleStart, i);
                     const dayProgress = Math.min(100, Math.max(0, (task.progress - (i / durationDays * 100)) * durationDays));
                     const inBuffer = isBufferDate(dayDate);
+                    const isSelected = !inBuffer && !!selectedDate && dayDate.getTime() === selectedDate.getTime();
 
                     return (
                         <div
@@ -281,7 +284,9 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({ task, projectStartD
                                     ${inBuffer
                                         ? 'bg-gray-100 border-gray-200 opacity-40 cursor-not-allowed pointer-events-none'
                                         : `${styles.bar} shadow-sm cursor-pointer hover:brightness-95`
-                                    }`}
+                                    }
+                                    ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+                                style={isSelected ? { backgroundColor: '#dbeafe' } : undefined}
                                 onClick={inBuffer ? undefined : (e) => {
                                     e.stopPropagation();
                                     onDayClick(task, dayDate);

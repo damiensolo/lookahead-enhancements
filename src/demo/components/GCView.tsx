@@ -71,11 +71,14 @@ export const GCView: React.FC = () => {
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 mb-4">
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-sm font-semibold text-slate-50">{DEMO_PROJECT.shortName}</div>
-              <div className="text-xs text-slate-400">{DEMO_LOOKAHEAD_WINDOW.label}</div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-md border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[11px] font-bold text-blue-200 uppercase tracking-wide">GC</span>
+                <span className="text-sm font-semibold text-slate-50">{DEMO_PROJECT.shortName}</span>
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">{DEMO_LOOKAHEAD_WINDOW.label}</div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <StatusBadge type="schedule" status={lookaheadStatus} size="md" />
@@ -161,7 +164,7 @@ export const GCView: React.FC = () => {
         )}
       </div>
 
-      <div className="w-[360px] flex-shrink-0 hidden xl:block">
+      <div className="w-[320px] flex-shrink-0 hidden lg:block">
         <ActivityFeed entries={activityFeed} />
       </div>
     </div>

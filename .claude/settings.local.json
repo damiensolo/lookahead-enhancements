@@ -13,7 +13,8 @@
       "Bash(start:*)",
       "Bash(grep:*)",
       "Bash(git -C \"C:/Users/damie/Projects/lookahead-enhancements\" diff HEAD -- src/components/views/lookahead/LookaheadView.tsx)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

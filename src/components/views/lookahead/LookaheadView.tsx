@@ -232,6 +232,7 @@ const LookaheadView: React.FC = () => {
     const [taskToBreakdown, setTaskToBreakdown] = useState<LookaheadTask | null>(null);
     const [addCrewContext, setAddCrewContext] = useState<{ taskId: string | number; dateString: string } | null>(null);
     const [taskForCommitmentModal, setTaskForCommitmentModal] = useState<LookaheadTask | null>(null);
+    const [taskForGcReviewModal, setTaskForGcReviewModal] = useState<LookaheadTask | null>(null);
     const [isPanelClosing, setIsPanelClosing] = useState(false);
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
     const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('chat');
@@ -876,6 +877,20 @@ const LookaheadView: React.FC = () => {
                     if (level > 0) return null;
                     const meta = commitmentMeta(task.commitmentStatus);
                     const elevated = task.commitmentStatus === 'rejected' || task.commitmentStatus === 'adjustment_proposed' || task.commitmentStatus === 'disputed';
+                    if (persona === 'gc') {
+                        return (
+                            <div className="flex items-center justify-center w-full">
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setTaskForGcReviewModal(task); }}
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all duration-200 cursor-pointer hover:brightness-95 hover:shadow-sm ${meta.classes} ${elevated ? 'ring-2 ring-amber-200' : ''}`}
+                                    title="Click to review"
+                                >
+                                    {meta.label}
+                                </button>
+                            </div>
+                        );
+                    }
                     return (
                         <div className="flex items-center justify-center w-full">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all duration-200 ${meta.classes} ${elevated ? 'ring-2 ring-amber-200' : ''}`}>
@@ -1184,6 +1199,7 @@ const LookaheadView: React.FC = () => {
                         disabled={activeSchedule.status === ScheduleStatus.Closed}
                         bufferDaysBefore={bufferDaysBefore}
                         periodDurationDays={periodDurationDays}
+                        selectedDate={selectedDay?.task.id === task.id ? selectedDay.date : null}
                     />
                 </div>
             </div>
@@ -1574,6 +1590,15 @@ const LookaheadView: React.FC = () => {
                         />
                     )}
 
+                    <GcReviewModal
+                        isOpen={!!taskForGcReviewModal}
+                        task={taskForGcReviewModal ? (findTaskById(plannerTasks, taskForGcReviewModal.id) ?? taskForGcReviewModal) : null}
+                        onClose={() => setTaskForGcReviewModal(null)}
+                        onAccept={(taskId, payload) => { gcAcceptAdjustment(activeSchedule.id, taskId, payload); setTaskForGcReviewModal(null); }}
+                        onCounterPropose={(taskId, payload) => { gcCounterPropose(activeSchedule.id, taskId, payload); setTaskForGcReviewModal(null); }}
+                        onDispute={(taskId, payload) => { gcMarkDisputed(activeSchedule.id, taskId, payload); setTaskForGcReviewModal(null); }}
+                    />
+
                     <CommitmentModal
                         isOpen={!!taskForCommitmentModal}
                         onClose={() => setTaskForCommitmentModal(null)}
@@ -1769,6 +1794,316 @@ const SubTaskCard: React.FC<{
                         </button>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+};
+
+const GcReviewModal: React.FC<{
+    isOpen: boolean;
+    task: LookaheadTask | null;
+    onClose: () => void;
+    onAccept: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
+    onCounterPropose: (taskId: string | number, payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
+    onDispute: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
+}> = ({ isOpen, task, onClose, onAccept, onCounterPropose, onDispute }) => {
+    const [mode, setMode] = useState<'none' | 'counter'>('none');
+    const [gcNotes, setGcNotes] = useState('');
+    const [counterStart, setCounterStart] = useState('');
+    const [counterEnd, setCounterEnd] = useState('');
+    const [counterCrew, setCounterCrew] = useState('');
+    const [counterNotes, setCounterNotes] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) {
+            setMode('none');
+            setGcNotes('');
+            setCounterStart('');
+            setCounterEnd('');
+            setCounterCrew('');
+            setCounterNotes('');
+        } else if (task) {
+            setCounterStart(task.startDate ?? '');
+            setCounterEnd(task.finishDate ?? '');
+            setCounterCrew(String(task.crewAssigned ?? ''));
+        }
+    }, [isOpen, task]);
+
+    if (!isOpen || !task) return null;
+
+    const status = task.commitmentStatus ?? 'pending';
+    const meta = commitmentMeta(status);
+    const proposal = task.adjustmentProposal;
+    const history = proposal?.history ?? [];
+
+    const canAccept = status === 'adjustment_proposed' || status === 'gc_revised';
+    const canCounter = status === 'adjustment_proposed' || status === 'rejected';
+    const canDispute = status === 'adjustment_proposed' || status === 'rejected' || status === 'gc_revised';
+
+    const hasScResponse = status === 'adjustment_proposed' || status === 'rejected' || status === 'gc_revised' || status === 'disputed';
+    const hasGcResponse = !!proposal?.gcResponseNotes;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                    <div className="min-w-0 pr-4">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-sm font-bold text-gray-900 truncate">{task.name}</h2>
+                            <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${meta.classes}`}>
+                                {meta.label}
+                            </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">{task.location || '—'} · {task.contractor || '—'}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-shrink-0 p-1.5 hover:bg-gray-200 rounded-full transition-colors"
+                        aria-label="Close"
+                    >
+                        <XIcon className="w-4 h-4 text-gray-500" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+                    {/* Original task details */}
+                    <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Planned</div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                            <div>
+                                <div className="text-gray-500">Start</div>
+                                <div className="font-medium text-gray-900">{task.startDate || '—'}</div>
+                            </div>
+                            <div>
+                                <div className="text-gray-500">Finish</div>
+                                <div className="font-medium text-gray-900">{task.finishDate || '—'}</div>
+                            </div>
+                            <div>
+                                <div className="text-gray-500">Crew</div>
+                                <div className="font-medium text-gray-900">{task.crewAssigned ?? '—'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SC response */}
+                    {hasScResponse && (
+                        <div className={`rounded-lg border p-3 ${
+                            status === 'rejected' ? 'border-red-200 bg-red-50' :
+                            status === 'disputed' ? 'border-orange-200 bg-orange-50' :
+                            'border-amber-200 bg-amber-50'
+                        }`}>
+                            <div className={`text-[11px] font-semibold uppercase tracking-wide mb-2 ${
+                                status === 'rejected' ? 'text-red-700' :
+                                status === 'disputed' ? 'text-orange-700' :
+                                'text-amber-700'
+                            }`}>
+                                {status === 'rejected' ? 'Rejection' : status === 'disputed' ? 'Dispute' : 'Proposed adjustment'}
+                            </div>
+                            {(status === 'adjustment_proposed' || status === 'gc_revised') && proposal && (
+                                <div className="grid grid-cols-3 gap-3 text-xs mb-2">
+                                    <div>
+                                        <div className="text-gray-500">Proposed start</div>
+                                        <div className="font-medium text-gray-900">{proposal.proposedStartDate || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-gray-500">Proposed finish</div>
+                                        <div className="font-medium text-gray-900">{proposal.proposedEndDate || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-gray-500">Proposed crew</div>
+                                        <div className="font-medium text-gray-900">{proposal.proposedCrewSize ?? '—'}</div>
+                                    </div>
+                                </div>
+                            )}
+                            {proposal?.rejectionReason && (
+                                <div className="text-xs mb-1">
+                                    <span className="text-gray-500">Reason: </span>
+                                    <span className="font-medium text-gray-900">{proposal.rejectionReason}</span>
+                                </div>
+                            )}
+                            {proposal?.subNotes && (
+                                <div className="text-xs text-gray-700 italic">"{proposal.subNotes}"</div>
+                            )}
+                            {proposal?.proposedMaterialNotes && (
+                                <div className="text-xs mt-1">
+                                    <span className="text-gray-500">Material notes: </span>
+                                    <span className="text-gray-900">{proposal.proposedMaterialNotes}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Existing GC response notes */}
+                    {hasGcResponse && (
+                        <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-teal-700 mb-1">GC response</div>
+                            <div className="text-xs text-gray-700 italic">"{proposal!.gcResponseNotes}"</div>
+                        </div>
+                    )}
+
+                    {/* History */}
+                    {history.length > 0 && (
+                        <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">History</div>
+                            <div className="space-y-1.5">
+                                {history.map((entry, i) => (
+                                    <div key={i} className="flex items-start gap-2 text-xs">
+                                        <span className={`flex-shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${entry.actor === 'gc' ? 'bg-blue-400' : 'bg-amber-400'}`} />
+                                        <div className="min-w-0">
+                                            <span className="font-semibold text-gray-700">{entry.actor === 'gc' ? 'GC' : 'Sub'}</span>
+                                            {entry.summary && <span className="text-gray-500"> — {entry.summary}</span>}
+                                            <span className="text-gray-400 ml-1">{new Date(entry.at).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* GC actions */}
+                    {(canAccept || canCounter || canDispute) && (
+                        <div className="border-t border-gray-100 pt-4 space-y-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Your response</div>
+
+                            <div className="flex items-center gap-2">
+                                {canAccept && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onAccept(task.id, gcNotes ? { gcResponseNotes: gcNotes } : undefined)}
+                                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                                    >
+                                        Accept
+                                    </button>
+                                )}
+                                {canCounter && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setMode(m => m === 'counter' ? 'none' : 'counter')}
+                                        className={`flex-1 px-3 py-2 text-xs font-bold rounded-md border transition-colors ${
+                                            mode === 'counter'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100'
+                                        }`}
+                                    >
+                                        Counter-propose
+                                    </button>
+                                )}
+                                {canDispute && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onDispute(task.id, gcNotes ? { gcResponseNotes: gcNotes } : undefined)}
+                                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md border border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100 transition-colors"
+                                    >
+                                        Dispute
+                                    </button>
+                                )}
+                            </div>
+
+                            <label className="block text-xs text-gray-600">
+                                Notes (optional)
+                                <textarea
+                                    value={gcNotes}
+                                    onChange={(e) => setGcNotes(e.target.value)}
+                                    rows={2}
+                                    placeholder="Add a note to the subcontractor…"
+                                    className="mt-1 w-full px-2.5 py-2 text-xs border border-gray-200 rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                />
+                            </label>
+
+                            {mode === 'counter' && (
+                                <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 space-y-2">
+                                    <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wide">Counter-proposal</div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="text-xs text-gray-700">
+                                            Start
+                                            <input
+                                                type="date"
+                                                value={counterStart}
+                                                onChange={(e) => setCounterStart(e.target.value)}
+                                                className="mt-1 w-full px-2 py-1.5 text-xs border border-purple-200 rounded bg-white"
+                                            />
+                                        </label>
+                                        <label className="text-xs text-gray-700">
+                                            Finish
+                                            <input
+                                                type="date"
+                                                value={counterEnd}
+                                                onChange={(e) => setCounterEnd(e.target.value)}
+                                                className="mt-1 w-full px-2 py-1.5 text-xs border border-purple-200 rounded bg-white"
+                                            />
+                                        </label>
+                                    </div>
+                                    <label className="text-xs text-gray-700">
+                                        Crew size
+                                        <input
+                                            type="number"
+                                            value={counterCrew}
+                                            onChange={(e) => setCounterCrew(e.target.value)}
+                                            className="mt-1 w-full px-2 py-1.5 text-xs border border-purple-200 rounded bg-white"
+                                        />
+                                    </label>
+                                    <label className="text-xs text-gray-700">
+                                        GC notes
+                                        <input
+                                            type="text"
+                                            value={counterNotes}
+                                            onChange={(e) => setCounterNotes(e.target.value)}
+                                            className="mt-1 w-full px-2 py-1.5 text-xs border border-purple-200 rounded bg-white"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        disabled={!counterStart || !counterEnd}
+                                        onClick={() => {
+                                            onCounterPropose(task.id, {
+                                                proposedStartDate: counterStart,
+                                                proposedEndDate: counterEnd,
+                                                proposedCrewSize: counterCrew ? parseInt(counterCrew, 10) : undefined,
+                                                gcResponseNotes: counterNotes || gcNotes || undefined,
+                                            });
+                                        }}
+                                        className="w-full px-3 py-2 text-xs font-bold rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Send Counter-proposal
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Info-only statuses */}
+                    {status === 'committed' && (
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-800 font-medium">
+                            Subcontractor has committed to this task as planned.
+                        </div>
+                    )}
+                    {status === 'gc_accepted' && (
+                        <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-800 font-medium">
+                            You accepted the subcontractor's adjustment.{proposal?.gcResponseNotes ? '' : ' No further action needed.'}
+                        </div>
+                    )}
+                    {status === 'pending' && (
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                            Awaiting response from subcontractor.
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-xs font-semibold rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     );
