@@ -233,7 +233,7 @@ const LookaheadView: React.FC = () => {
     const [addCrewContext, setAddCrewContext] = useState<{ taskId: string | number; dateString: string } | null>(null);
     const [taskForCommitmentModal, setTaskForCommitmentModal] = useState<LookaheadTask | null>(null);
     const [isPanelClosing, setIsPanelClosing] = useState(false);
-    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
     const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('chat');
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
@@ -948,7 +948,7 @@ const LookaheadView: React.FC = () => {
                                     <TooltipContent side="bottom">Commit Required</TooltipContent>
                                 </Tooltip>
                                 )}
-                                {isGC && (
+                                {isGC && activeSchedule.status !== ScheduleStatus.Active && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button

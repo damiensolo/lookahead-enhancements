@@ -12,7 +12,7 @@ interface ProgressSliderProps {
 }
 
 const snapToNearest = (value: number): number => {
-    let nearest = SNAP_POINTS[0];
+    let nearest: number = SNAP_POINTS[0];
     let minDist = Math.abs(value - nearest);
     for (const p of SNAP_POINTS) {
         const d = Math.abs(value - p);

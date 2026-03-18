@@ -469,7 +469,14 @@ const Header: React.FC<HeaderProps> = ({ onSelectionChange }) => {
                     </div>
 
                     {/* Right Action Icons */}
-                    <div className="flex items-center gap-x-8 pr-2">
+                    <div className="flex items-center gap-x-6 pr-2">
+                        <a
+                            href="/demo/lookahead-review"
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-400/70 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 hover:border-emerald-300 transition-colors"
+                        >
+                            <span className="text-[11px]">▶</span>
+                            <span>Live Demo</span>
+                        </a>
                         <button className="text-gray-300 hover:text-white transition-colors duration-200" aria-label="Search"><SearchIcon /></button>
                         <button className="text-gray-300 hover:text-white transition-colors duration-200" aria-label="Chat"><ChatIcon /></button>
                         <button className="text-gray-300 hover:text-white transition-colors duration-200" aria-label="Help"><HelpIcon /></button>

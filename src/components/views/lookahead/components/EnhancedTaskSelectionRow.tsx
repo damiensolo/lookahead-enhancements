@@ -1,6 +1,7 @@
 import React from 'react';
-import { LookaheadTask, ConstraintType, ConstraintStatus } from '../types';
+import { LookaheadTask, ConstraintType, ConstraintStatus, ScheduleStatus } from '../types';
 import { AlertTriangleIcon, ClipboardIcon, DocumentIcon } from '../../../common/Icons';
+import { parseLookaheadDate } from '../../../../lib/dateUtils';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../common/ui/Tooltip';
 
@@ -8,12 +9,14 @@ interface EnhancedTaskSelectionRowProps {
   task: LookaheadTask;
   onSelect: (task: LookaheadTask) => void;
   isSelected: boolean;
+  showStatusLabels: boolean; // New prop
 }
 
 export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> = ({
   task,
   onSelect,
   isSelected,
+  showStatusLabels,
 }) => {
   const hasUnansweredRFIs = task.constraints.some(
     (c) => c.type === ConstraintType.RFI && (c.status === ConstraintStatus.Pending || c.status === ConstraintStatus.Overdue)
@@ -22,6 +25,38 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
   const hasUnansweredSubmittals = task.constraints.some(
     (c) => c.type === ConstraintType.Submittal && (c.status === ConstraintStatus.Pending || c.status === ConstraintStatus.Overdue)
   );
+
+  const isTaskDelayed = (() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const taskStartDate = parseLookaheadDate(task.startDate);
+    const taskFinishDate = parseLookaheadDate(task.finishDate);
+    const fieldStartDate = task.fieldStartDate ? parseLookaheadDate(task.fieldStartDate) : null;
+
+    // Check if dates are valid before proceeding
+    if (isNaN(taskStartDate.getTime()) || isNaN(taskFinishDate.getTime())) {
+      console.error("Invalid date encountered for task:", task.id, task.name);
+      return false;
+    }
+    if (fieldStartDate && isNaN(fieldStartDate.getTime())) {
+      console.error("Invalid field start date encountered for task:", task.id, task.name);
+      return false;
+    }
+
+    const isStarted = taskStartDate <= today;
+    const isNotComplete = task.progress < 100;
+
+    // Delayed if field start date is after planned start date
+    if (fieldStartDate && fieldStartDate > taskStartDate) return true;
+
+    // Delayed if not complete and theoretical finish date is in the past
+    if (isStarted && isNotComplete && taskFinishDate < today) return true;
+
+    return false;
+  })();
+
+  const isIncomplete = task.progress < 100;
 
   return (
     <TooltipProvider>
@@ -39,7 +74,19 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
             className="w-4 h-4 rounded border-black/20 text-emerald-600 focus:ring-emerald-500"
           />
           <div>
-            <div className="font-medium text-sm text-zinc-900">{task.name}</div>
+            <div className="font-medium text-sm text-zinc-900 flex items-center gap-2">
+              <span>{task.name}</span>
+              {showStatusLabels && isTaskDelayed && (
+                <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wider border border-red-200">
+                  Delayed
+                </span>
+              )}
+              {showStatusLabels && isIncomplete && !isTaskDelayed && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold uppercase tracking-wider border border-amber-200">
+                  Incomplete
+                </span>
+              )}
+            </div>
             <div className="text-xs text-zinc-500">{task.contractor} • {task.startDate} to {task.finishDate}</div>
           </div>
         </div>

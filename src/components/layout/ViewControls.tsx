@@ -107,9 +107,10 @@ const TabMenu: React.FC<{ view: View, isDefault: boolean, onRename: () => void, 
 interface ViewControlsProps {
   /** Rendered before the search field when present; a pipe "|" is shown between this and the search (e.g. left panel toggle in lookahead) */
   renderBeforeSearch?: React.ReactNode;
+  renderRoleSwitcher?: React.ReactNode;
 }
 
-const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch }) => {
+const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch, renderRoleSwitcher }) => {
   const {
     views, activeViewId, defaultViewId, handleSelectView, setModalState, handleDeleteView, setDefaultViewId, setViews,
     activeViewMode, handleViewModeChange,
@@ -150,6 +151,7 @@ const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch }) => {
 
   return (
     <div className="flex items-center gap-3">
+        {renderRoleSwitcher} {/* Render the RoleSwitcher here */}
         {showSearchAndFilter && (
             <>
                 {renderBeforeSearch != null && (

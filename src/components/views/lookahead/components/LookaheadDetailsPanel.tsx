@@ -57,7 +57,6 @@ const getStatusDot = (status: ConstraintStatus) => {
       color = 'bg-green-500';
       break;
     case ConstraintStatus.Overdue:
-    case ConstraintStatus.Blocked:
       color = 'bg-red-500';
       break;
     case ConstraintStatus.Pending:
@@ -73,7 +72,6 @@ const getStatusClasses = (status: ConstraintStatus): { text: string; bg: string;
     case ConstraintStatus.OnSite:
       return { text: 'text-green-800', bg: 'bg-green-100' };
     case ConstraintStatus.Overdue:
-    case ConstraintStatus.Blocked:
       return { text: 'text-red-800', bg: 'bg-red-100' };
     case ConstraintStatus.Pending:
       return { text: 'text-yellow-800', bg: 'bg-yellow-100' };

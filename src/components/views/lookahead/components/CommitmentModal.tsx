@@ -40,7 +40,10 @@ export const CommitmentModal: React.FC<CommitmentModalProps> = ({
 
   if (!isOpen || !task) return null;
 
-  const crewAdded = !!(task.assignedCrewByDate && Object.values(task.assignedCrewByDate).some(ids => ids.length > 0));
+  const crewAdded = !!(
+    task.assignedCrewByDate &&
+    Object.values(task.assignedCrewByDate as Record<string, string[]>).some((ids) => ids.length > 0)
+  );
   const canCommit = (commitment?.plannedQtyAccepted ?? false) && crewAdded && (commitment?.equipmentMaterialVerified ?? false);
 
   return (

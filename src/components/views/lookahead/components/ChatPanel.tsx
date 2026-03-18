@@ -220,7 +220,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         onKeyDown={handleKeyDown}
                         placeholder="Message the team… (Enter to send)"
                         rows={1}
-                        className="flex-1 resize-none text-xs text-gray-700 placeholder-gray-400 bg-transparent leading-relaxed"
+                        className="flex-1 resize-none text-xs text-gray-700 placeholder-gray-400 bg-transparent leading-relaxed focus:outline-none"
                         style={{ maxHeight: '80px', overflowY: 'auto' }}
                     />
                     <button

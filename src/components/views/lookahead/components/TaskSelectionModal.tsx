@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { LookaheadTask, ConstraintType, ConstraintStatus } from '../types';
+import React, { useState, useMemo } from 'react';
+import { LookaheadTask, ConstraintType, ConstraintStatus, ScheduleStatus } from '../types';
 import { EnhancedTaskSelectionRow } from './EnhancedTaskSelectionRow';
 import { XIcon, SearchIcon, ClipboardIcon, AlertTriangleIcon } from '../../../common/Icons';
+import { isSameDay, parseLookaheadDate } from '../../../../lib/dateUtils';
 
 interface TaskSelectionModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ interface TaskSelectionModalProps {
   onConfirm: (selectedTasks: LookaheadTask[]) => void;
   availableTasks: LookaheadTask[];
 }
+
+type TaskFilterType = 'all' | 'active' | 'incomplete' | 'delayed';
 
 export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
   isOpen,
@@ -18,13 +21,58 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<Set<string | number>>(new Set());
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+  const [taskTypeFilter, setTaskTypeFilter] = useState<TaskFilterType>('all');
 
-  if (!isOpen) return null;
+  const parsedStartDateFilter = useMemo(() => startDateFilter ? parseLookaheadDate(startDateFilter) : null, [startDateFilter]);
+  const parsedEndDateFilter = useMemo(() => endDateFilter ? parseLookaheadDate(endDateFilter) : null, [endDateFilter]);
 
-  const filteredTasks = availableTasks.filter(task => 
-    task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    task.contractor.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTasks = useMemo(() => {
+    // Only filter if the modal is open, otherwise return empty array to prevent unnecessary computation
+    if (!isOpen) return []; 
+
+    return availableTasks.filter(task => {
+      const matchesSearch =
+        task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.contractor.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Ensure dates are valid before comparison
+      const taskStartDate = parseLookaheadDate(task.startDate);
+      const taskEndDate = parseLookaheadDate(task.finishDate);
+
+      if (isNaN(taskStartDate.getTime()) || isNaN(taskEndDate.getTime())) {
+        console.error("Invalid date encountered in TaskSelectionModal for task:", task.id, task.name);
+        return false; // Exclude tasks with invalid dates from filtering
+      }
+
+      const matchesDateRange = (!parsedStartDateFilter || taskStartDate >= parsedStartDateFilter) &&
+                               (!parsedEndDateFilter || taskEndDate <= parsedEndDateFilter);
+
+      let matchesTaskType = true;
+      if (taskTypeFilter === 'active') {
+        matchesTaskType = task.progress === 100; // Assuming 'active' means completed/on-track
+      } else if (taskTypeFilter === 'incomplete') {
+        matchesTaskType = task.progress < 100;
+      } else if (taskTypeFilter === 'delayed') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isStarted = taskStartDate <= today;
+        const isNotComplete = task.progress < 100;
+        const isBehind = isStarted && isNotComplete && taskEndDate < today;
+        const fieldStartDate = task.fieldStartDate ? parseLookaheadDate(task.fieldStartDate) : null;
+
+        if (fieldStartDate && isNaN(fieldStartDate.getTime())) {
+          console.error("Invalid field start date encountered in TaskSelectionModal for task:", task.id, task.name);
+          return false; // Exclude tasks with invalid field start dates from filtering
+        }
+
+        matchesTaskType = isBehind || (fieldStartDate && fieldStartDate > taskStartDate);
+      }
+
+      return matchesSearch && matchesDateRange && matchesTaskType;
+    });
+  }, [searchTerm, availableTasks, parsedStartDateFilter, parsedEndDateFilter, taskTypeFilter, isOpen]); // Add isOpen as a dependency
 
   const toggleTask = (task: LookaheadTask) => {
     const newSelected = new Set(selectedTasks);
@@ -42,6 +90,8 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh] overflow-hidden">
@@ -56,17 +106,50 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
           </button>
         </div>
 
-        {/* Search & Legend */}
+        {/* Filters and Search */}
         <div className="p-4 bg-zinc-50 border-b border-black/5 space-y-4">
-          <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Search tasks by name or contractor..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-black/10 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Search tasks by name or contractor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-black/10 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              />
+            </div>
+            <select
+              value={taskTypeFilter}
+              onChange={(e) => setTaskTypeFilter(e.target.value as TaskFilterType)}
+              className="px-3 py-2 text-sm border border-black/10 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            >
+              <option value="all">All Tasks</option>
+              <option value="active">Active Tasks</option>
+              <option value="incomplete">Incomplete Tasks</option>
+              <option value="delayed">Delayed Tasks</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <label className="text-sm text-zinc-700 flex items-center gap-2">
+              Start Date:
+              <input
+                type="date"
+                value={startDateFilter}
+                onChange={(e) => setStartDateFilter(e.target.value)}
+                className="px-3 py-2 text-sm border border-black/10 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </label>
+            <label className="text-sm text-zinc-700 flex items-center gap-2">
+              End Date:
+              <input
+                type="date"
+                value={endDateFilter}
+                onChange={(e) => setEndDateFilter(e.target.value)}
+                className="px-3 py-2 text-sm border border-black/10 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </label>
           </div>
 
           {/* Legend / Critical Info */}
@@ -109,6 +192,7 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
                 task={task}
                 isSelected={selectedTasks.has(task.id)}
                 onSelect={toggleTask}
+                showStatusLabels={true} // New prop to show status labels
               />
             ))
           ) : (

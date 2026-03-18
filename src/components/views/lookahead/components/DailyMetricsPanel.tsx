@@ -241,10 +241,10 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
                     </div>
                     {task.assignedCrewByDate && Object.keys(task.assignedCrewByDate).length > 0 ? (
                     <ul className="space-y-3 text-sm">
-                        {Object.entries(task.assignedCrewByDate)
+                        {Object.entries(task.assignedCrewByDate as Record<string, string[]>)
                             .sort(([a], [b]) => a.localeCompare(b))
                             .map(([dateStr, crewIds]) => {
-                                const assigned = crewIds
+                                const assigned = (crewIds as string[])
                                     .map(id => projectCrew.find(c => c.id === id))
                                     .filter((c): c is CrewMember => c != null);
                                 if (assigned.length === 0) return null;
