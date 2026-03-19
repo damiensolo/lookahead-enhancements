@@ -1,7 +1,9 @@
 import React, { useMemo } from 'react';
 import { LookaheadTask, DailyMetric, ConstraintStatus, WeatherForecast, CrewMember } from '../types';
 import { getEffectiveDailyMetrics, getTotalPlannedQuantity, getQuantityUnit, clampDailyPlan, formatQuantityDisplay, getMaxActualForDay } from '../utils/quantityUtils';
+import { getLookaheadPermissions } from '../utils/permissionUtils';
 import { XIcon, SunIcon, CloudIcon, CloudRainIcon, HardHatIcon } from '../../../common/Icons';
+import { formatDateISO } from '../../../../lib/dateUtils';
 
 const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => {
     switch (icon) {
@@ -23,6 +25,8 @@ interface DailyMetricsPanelProps {
   projectCrew?: CrewMember[];
   /** When true, render content only (no aside wrapper) for use inside unified panel */
   embedded?: boolean;
+  /** Lookahead schedule status string — used to derive right-pane display permissions */
+  scheduleStatus?: string;
 }
 
 const MetricRow: React.FC<{
@@ -64,7 +68,7 @@ const getOverallStatusInfo = (task: LookaheadTask): { label: string; dotColor: s
     return { label: 'Ready', dotColor: 'bg-green-500' };
 };
 
-const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, onUpdateDailyQuantity, onUpdateAssignedCrew, onOpenAddCrew, isActive, projectCrew = [], embedded = false }) => {
+const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, onUpdateDailyQuantity, onUpdateAssignedCrew, onOpenAddCrew, isActive, projectCrew = [], embedded = false, scheduleStatus }) => {
   
   const task = data?.task;
   const date = data?.date;
@@ -96,7 +100,7 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
     return null;
   }
   
-  const dateString = date.toISOString().split('T')[0];
+  const dateString = formatDateISO(date);
   const metricData = dailyMetrics.find(m => m.date === dateString);
   const metricIndex = dailyMetrics.findIndex(m => m.date === dateString);
   const totalPlanned = task ? getTotalPlannedQuantity(task) : 0;
@@ -104,6 +108,11 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
   const overallStatus = getOverallStatusInfo(task);
   const progressPercent = task.manHours.budget > 0 ? (task.manHours.actual / task.manHours.budget) * 100 : 0;
 
+  // Right pane qty display: dayPanelActualEditable is always false — both fields are read-only.
+  // showActualQtySection indicates active state; in draft/in_review show 0 for actual.
+  const { showActualQtySection } = getLookaheadPermissions(scheduleStatus ?? '');
+  const qtyPlan = metricData?.quantity?.plan ?? 0;
+  const qtyActual = showActualQtySection ? (metricData?.quantity?.actual ?? 0) : 0;
 
   const content = (
         <div className="flex flex-col h-full bg-gray-50">
@@ -151,78 +160,38 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
             </div>
 
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Daily Plan vs. Actual</h3>
-            {metricData ? (
-                <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="grid grid-cols-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 pb-2 mb-2">
-                        <span>Metric</span>
-                        <span>Plan</span>
-                        <span>Actual</span>
-                    </div>
-                    <div className="divide-y divide-gray-200 text-sm">
-                        {onUpdateDailyQuantity && metricIndex >= 0 ? (
-                            <div className="grid grid-cols-3 items-center py-3">
-                                <div className="font-semibold text-gray-700">Quantity</div>
-                                <div>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={totalPlanned}
-                                        step={0.01}
-                                        value={metricData.quantity?.plan ?? 0}
-                                        onChange={(e) => {
-                                            const v = parseFloat(e.target.value);
-                                            if (!isNaN(v) && v >= 0) {
-                                                const clamped = clampDailyPlan(dailyMetrics, metricIndex, v, totalPlanned);
-                                                onUpdateDailyQuantity(task.id, dateString, clamped, metricData.quantity?.actual ?? 0);
-                                            }
-                                        }}
-                                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={getMaxActualForDay(task, dateString)}
-                                        step={0.01}
-                                        value={metricData.quantity?.actual ?? 0}
-                                        onChange={(e) => {
-                                            const v = parseFloat(e.target.value);
-                                            if (!isNaN(v) && v >= 0) {
-                                                onUpdateDailyQuantity(task.id, dateString, metricData.quantity?.plan ?? 0, v);
-                                            }
-                                        }}
-                                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 font-medium text-blue-700"
-                                    />
-                                </div>
-                            </div>
-                        ) : (
-                            <MetricRow 
-                                label="Quantity" 
-                                plan={metricData.quantity?.plan ?? 0} 
-                                actual={metricData.quantity?.actual ?? 0}
-                                unit={metricData.quantity?.unit ?? unit}
-                            />
-                        )}
-                        <MetricRow 
-                            label="Hours" 
-                            plan={metricData.hours?.plan ?? 0} 
-                            actual={metricData.hours?.actual ?? 0}
-                            unit="hrs"
-                        />
-                        <MetricRow 
-                            label="Crew" 
-                            plan={metricData.crew?.plan ?? 0} 
-                            actual={metricData.crew?.actual ?? 0}
-                            unit="people"
-                        />
-                    </div>
+            <div className="bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 pb-2 mb-2">
+                    <span>Metric</span>
+                    <span>Plan</span>
+                    <span>Actual</span>
                 </div>
-            ) : (
-                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                    <p className="text-gray-500 text-sm">No data available for this day.</p>
+                <div className="divide-y divide-gray-200 text-sm">
+                    {/* Quantity — planned and actual are always read-only in the right pane
+                        (dayPanelActualEditable is always false per permission model) */}
+                    <div className="grid grid-cols-3 items-center py-3">
+                        <div className="font-semibold text-gray-700">Quantity <span className="text-xs text-gray-400 font-normal">{unit}</span></div>
+                        <div className="text-gray-600">
+                            {qtyPlan > 0 ? formatQuantityDisplay(qtyPlan) : '—'}
+                        </div>
+                        <div className={`font-bold ${showActualQtySection ? (qtyActual < qtyPlan ? 'text-red-600' : qtyActual > qtyPlan ? 'text-green-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                            {formatQuantityDisplay(qtyActual)}
+                        </div>
+                    </div>
+                    <MetricRow
+                        label="Hours"
+                        plan={metricData?.hours?.plan ?? 0}
+                        actual={metricData?.hours?.actual ?? 0}
+                        unit="hrs"
+                    />
+                    <MetricRow
+                        label="Crew"
+                        plan={metricData?.crew?.plan ?? 0}
+                        actual={metricData?.crew?.actual ?? 0}
+                        unit="people"
+                    />
                 </div>
-            )}
+            </div>
 
             {projectCrew.length > 0 && (
                 <div className="mt-4">

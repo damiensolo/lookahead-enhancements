@@ -94,6 +94,7 @@ export interface View {
   columns: Column[];
   displayDensity: DisplayDensity;
   showGridLines: boolean;
+  showMasterRange: boolean;
   taskStyles?: { [taskId: number]: TaskStyle };
   fontSize: number;
 }

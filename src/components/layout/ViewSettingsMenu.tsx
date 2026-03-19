@@ -5,7 +5,7 @@ import { useProject } from '../../context/ProjectContext';
 import { DisplayDensity, ColumnId } from '../../types';
 
 const ViewSettingsMenu: React.FC = () => {
-  const { activeView, setColumns, setDisplayDensity, setFontSize } = useProject();
+  const { activeView, setColumns, setDisplayDensity, setFontSize, setShowMasterRange } = useProject();
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -62,6 +62,7 @@ const ViewSettingsMenu: React.FC = () => {
   const resetToDefault = () => {
     setDisplayDensity('comfortable');
     setFontSize(12);
+    setShowMasterRange(false);
     setColumns(prev => prev.map(col => ({ ...col, visible: true })));
   };
 
@@ -221,6 +222,26 @@ const ViewSettingsMenu: React.FC = () => {
                   <span className="text-lg font-bold leading-none">+</span>
                 </button>
               </div>
+            </div>
+
+            <div className="h-px bg-gray-100 my-2 mx-2" />
+
+            {/* Calendar Section */}
+            <div>
+              <div className="px-2 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-tight">Calendar</div>
+              <button
+                onClick={() => setShowMasterRange(!activeView.showMasterRange)}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors group"
+              >
+                <span className={`text-sm ${activeView.showMasterRange ? 'text-gray-700' : 'text-gray-400'}`}>
+                  Compare to Master
+                </span>
+                {activeView.showMasterRange ? (
+                  <EyeIcon className="w-4 h-4 text-blue-500" />
+                ) : (
+                  <EyeOffIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-400" />
+                )}
+              </button>
             </div>
           </div>
 

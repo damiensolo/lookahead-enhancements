@@ -14,7 +14,10 @@
       "Bash(grep:*)",
       "Bash(git -C \"C:/Users/damie/Projects/lookahead-enhancements\" diff HEAD -- src/components/views/lookahead/LookaheadView.tsx)",
       "Bash(git:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(find C:UsersdamieProjectslookahead-enhancementssrc -type f -name *.css -o -name *.scss)"
     ]
   }
 }

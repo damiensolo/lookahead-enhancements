@@ -37,15 +37,15 @@ const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => 
     }
 };
 
-const DAY_WIDTH = 32;
+const DAY_WIDTH = 40;
 const LOOKAHEAD_BUFFER_DAYS = 2;
 const MAX_TIMELINE_DAYS_WITHOUT_PERIOD = 84; // Cap when schedule has no period to avoid excessive scroll
 
 const getRowHeight = (density: DisplayDensity) => {
   switch (density) {
-    case 'compact': return 30;
-    case 'standard': return 34;
-    case 'comfortable': return 42;
+    case 'compact': return 36;
+    case 'standard': return 40;
+    case 'comfortable': return 50;
     default: return 34;
   }
 };
@@ -85,14 +85,9 @@ const RowNumberCheckbox = ({
 }) => {
     return (
         <div className="flex items-center justify-center w-full h-full relative group/sno">
-            <span className={`text-xs transition-opacity duration-100 ${isSelected ? 'opacity-0' : 'group-hover:opacity-0'} ${isCritical ? 'text-red-700 font-medium' : 'text-gray-400'}`}>
+            <span className={`text-xs transition-opacity duration-100 ${isSelected ? 'opacity-0' : 'group-hover:opacity-0'} text-gray-400`}>
                 {index}
             </span>
-            {isCritical && !isSelected && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/sno:opacity-100 pointer-events-none z-50 transition-opacity">
-                    Critical Task
-                </div>
-            )}
             <input
                 type="checkbox"
                 checked={isSelected}
@@ -168,7 +163,7 @@ const LookaheadView: React.FC = () => {
         gcAcceptAdjustment, gcCounterPropose, gcMarkDisputed
     } = useProject();
     const { persona, scCompany } = usePersona();
-    const { columns, displayDensity, fontSize } = activeView;
+    const { columns, displayDensity, fontSize, showMasterRange } = activeView;
 
     const activeSchedule = useMemo(() =>
         schedules.find(s => s.id === activeScheduleId) || schedules[0]
@@ -237,12 +232,22 @@ const LookaheadView: React.FC = () => {
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
     const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('chat');
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+    const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
 
     const handleCloseRightPanel = useCallback(() => {
         setSelectedDay(null);
         setSelectedTask(null);
-        setIsRightPanelOpen(false); // Close the panel
+        setSelectedCellId(null);
+        setIsRightPanelOpen(false);
     }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isRightPanelOpen) handleCloseRightPanel();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isRightPanelOpen, handleCloseRightPanel]);
 
     const allTaskIds = useMemo(() => {
         const ids: (string | number)[] = [];
@@ -676,10 +681,12 @@ const LookaheadView: React.FC = () => {
     const handleDayClick = useCallback((task: LookaheadTask, date: Date) => {
         const dateString = formatDateISO(date);
         const forecast = weatherByDate.get(dateString);
+        setSelectedCellId(`${task.id}_${dateString}`);
         setSelectedTask(task);
         setSelectedDay({ task, date, forecast });
         setRightPanelView('details');
         setIsRightPanelOpen(true);
+        setEditTrigger(null); // clear any pending digit trigger from before this click
     }, [weatherByDate]);
 
     const handleConstraintBadgeClick = useCallback((task: LookaheadTask) => {
@@ -753,7 +760,9 @@ const LookaheadView: React.FC = () => {
             const pq = ensureProductionQuantity(t);
             const totalPlanned = pq.planned;
             const maxActual = getMaxActualForDay(t, date);
-            const clampedActual = Math.min(Math.max(0, actual), maxActual);
+            const clampedActual = totalPlanned > 0
+                ? Math.min(Math.max(0, actual), maxActual)
+                : Math.max(0, actual);
             let dailyMetrics = pq.dailyMetrics.map(m =>
                 m.date === date
                     ? {
@@ -767,6 +776,14 @@ const LookaheadView: React.FC = () => {
                     }
                     : m
             );
+            if (!dailyMetrics.some(m => m.date === date)) {
+                dailyMetrics = [...dailyMetrics, {
+                    date,
+                    quantity: { plan: 0, actual: clampedActual, unit: pq.unit },
+                    hours: { plan: 0, actual: 0 },
+                    crew: { plan: 0, actual: 0 },
+                }];
+            }
             dailyMetrics = ensureDailyPlanWithinTotal(dailyMetrics, totalPlanned, pq.unit);
             const hasActual = dailyMetrics.some(m => (m.quantity?.actual ?? 0) > 0);
             return {
@@ -780,6 +797,29 @@ const LookaheadView: React.FC = () => {
         });
         setPlannerTasks(prev => updateRecursively(prev));
     }, []);
+
+    const handleCommitCellValue = useCallback((taskId: string | number, dateISO: string, value: number) => {
+        const found = findTaskById(plannerTasks, taskId);
+        const existingPlan = found?.productionQuantity?.dailyMetrics?.find(m => m.date === dateISO)?.quantity?.plan ?? 0;
+        handleUpdateDailyQuantity(taskId, dateISO, existingPlan, value);
+    }, [plannerTasks, findTaskById, handleUpdateDailyQuantity]);
+
+    const handleTabToNextCell = useCallback((currentDateISO: string) => {
+        if (!selectedCellId) return;
+        const taskIdStr = selectedCellId.split('_')[0];
+        const nextDate = addDays(parseLookaheadDate(currentDateISO), 1);
+        const nextDateISO = formatDateISO(nextDate);
+        const taskId: string | number = isNaN(Number(taskIdStr)) ? taskIdStr : Number(taskIdStr);
+        const found = findTaskById(plannerTasks, taskId);
+        if (!found) return;
+        const taskEnd = parseLookaheadDate(found.fieldFinishDate || found.finishDate);
+        if (nextDate > taskEnd) return;
+        const nextDayIndex = getDaysDiff(projectStartDate, nextDate);
+        if (nextDayIndex < bufferDaysBefore || nextDayIndex >= bufferDaysBefore + (periodDurationDays ?? Infinity)) return;
+        setSelectedCellId(`${taskIdStr}_${nextDateISO}`);
+        setSelectedTask(found);
+        setSelectedDay({ task: found, date: nextDate, forecast: weatherByDate.get(nextDateISO) });
+    }, [selectedCellId, plannerTasks, findTaskById, projectStartDate, bufferDaysBefore, periodDurationDays, weatherByDate]);
 
     const weekHeaders: { label: string; days: number }[] = [];
     let currentDate = new Date(projectStartDate);
@@ -833,6 +873,9 @@ const LookaheadView: React.FC = () => {
                         <span className={`truncate font-medium ${isFieldTask ? 'text-blue-700' : 'text-gray-800'}`} title={task.name}>{task.name}</span>
                         {isFieldTask && (
                             <span className="ml-1.5 px-1 rounded bg-blue-100 text-blue-600 text-[8px] font-bold uppercase tracking-wider" title="Field Breakdown Task">Field</span>
+                        )}
+                        {task.isCriticalPath && (
+                            <span className="ml-1.5 px-1 rounded bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-wider" title="Critical Path Task">CP</span>
                         )}
                         {hasBlockingConstraints && (
                             <Tooltip>
@@ -1145,23 +1188,30 @@ const LookaheadView: React.FC = () => {
     const renderLeftRow = (task: LookaheadTask, level: number, rowIndex: number) => {
         const isSelected = selectedRowIds.has(task.id);
         const isFieldTask = task.taskType === 'Field Task';
+        const isDetailActive = isRightPanelOpen && selectedTask?.id === task.id && !selectedDay;
         return (
-            <div 
-                key={task.id} 
-                className={`group flex transition-colors cursor-pointer ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`} 
+            <div
+                key={task.id}
+                className={`group flex transition-colors cursor-pointer ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`}
                 style={{ height: `${rowHeight}px` }}
-                onClick={() => { setSelectedDay(null); setSelectedTask(task); setRightPanelView('details'); setIsRightPanelOpen(true); }}
+                onClick={() => { setSelectedDay(null); setSelectedCellId(null); setSelectedTask(task); setRightPanelView('details'); setIsRightPanelOpen(true); }}
             >
-                <div 
+                <div
                     className={`flex ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white'}`}
                     style={{ width: `${totalLeftPanelWidth}px` }}
                 >
                     {visiblePanelColumns.map((col) => {
                         const bgClass = isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : 'bg-white';
+                        const snoBgClass = col.lookaheadType === 'sNo'
+                            ? (isDetailActive ? 'bg-indigo-100' : '')
+                            : '';
+                        const snoStickyBgClass = col.lookaheadType === 'sNo'
+                            ? (isDetailActive ? 'bg-indigo-100' : bgClass)
+                            : bgClass;
                         return (
-                        <div 
-                            key={col.id} 
-                            className={`flex-shrink-0 flex items-center px-2 text-sm relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'actions' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'} ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : ''} ${col.isSticky ? `sticky z-20 ${(col.lookaheadType === 'sNo' && task.isCriticalPath) ? 'bg-red-50' : bgClass}` : ''}`}
+                        <div
+                            key={col.id}
+                            className={`flex-shrink-0 flex items-center px-2 text-sm relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'actions' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'} ${snoBgClass} ${col.isSticky ? `sticky z-20 ${snoStickyBgClass}` : ''}`}
                             style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
                         >
                             {(col.lookaheadType === 'sNo' && task.isCriticalPath) && (
@@ -1197,9 +1247,17 @@ const LookaheadView: React.FC = () => {
                         onDayClick={handleDayClick}
                         offsetLeft={0}
                         disabled={activeSchedule.status === ScheduleStatus.Closed}
+                        scheduleStatus={activeSchedule.status}
                         bufferDaysBefore={bufferDaysBefore}
                         periodDurationDays={periodDurationDays}
-                        selectedDate={selectedDay?.task.id === task.id ? selectedDay.date : null}
+                        showMasterRange={showMasterRange}
+                        selectedDate={
+                            selectedCellId && selectedCellId.startsWith(`${task.id}_`)
+                                ? parseLookaheadDate(selectedCellId.slice(String(task.id).length + 1))
+                                : null
+                        }
+                        onCommitCellValue={handleCommitCellValue}
+                        onTabToNextCell={handleTabToNextCell}
                     />
                 </div>
             </div>
@@ -1446,7 +1504,7 @@ const LookaheadView: React.FC = () => {
                                     </div>
 
                                     {/* Timeline body */}
-                                    <div className="relative z-10">
+                                    <div className="relative z-10" onClick={() => setSelectedCellId(null)}>
                                         {renderRightRows()}
                                     </div>
                                 </div>
@@ -1491,6 +1549,7 @@ const LookaheadView: React.FC = () => {
                                                         : undefined
                                                 }
                                                 isActive={activeSchedule.status === ScheduleStatus.Active}
+                                                scheduleStatus={activeSchedule.status}
                                                 projectCrew={MOCK_PROJECT_CREW}
                                                 embedded
                                             />

@@ -3,15 +3,10 @@ import { addDays, formatDateISO, parseLookaheadDate } from '../../../../lib/date
 
 const DEFAULT_UNIT = 'EA';
 
-const MAX_DECIMALS = 4;
-
-/** Format quantity for display: avoid long floats like 33.29000000000008 */
+/** Format quantity for display: whole numbers only, no fractional decimals */
 export function formatQuantityDisplay(value: number): string {
   if (value == null || Number.isNaN(value)) return '0';
-  const rounded = Math.round(value * Math.pow(10, MAX_DECIMALS)) / Math.pow(10, MAX_DECIMALS);
-  if (rounded === Math.floor(rounded)) return String(Math.round(rounded));
-  const s = rounded.toFixed(MAX_DECIMALS);
-  return s.replace(/\.?0+$/, '');
+  return String(Math.round(value));
 }
 
 /** Max actual allowed for a given day so total actual ≤ total planned (no approved exception). */

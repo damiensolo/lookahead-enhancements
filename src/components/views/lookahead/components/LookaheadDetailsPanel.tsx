@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, CONTRACTORS, TaskDelta, CommitmentState, ProjectRisk, ScheduleStatus, TaskAdjustmentProposal } from '../types';
 import { getEffectiveDailyMetrics, getTotalPlannedQuantity, getTotalActualQuantity, getQuantityUnit, ensureProductionQuantity, formatQuantityDisplay, getMaxActualForDay } from '../utils/quantityUtils';
+import { getLookaheadPermissions } from '../utils/permissionUtils';
 import { XIcon, PlusIcon, AlertTriangleIcon, HardHatIcon } from '../../../common/Icons';
 import ManHoursBar from './ManHoursBar';
 import ContractorSelect from './ContractorSelect';
@@ -175,6 +176,8 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
     );
   }, [task?.id]);
   
+  const { canEditPlannedQty, showActualQtySection, canEditActualQty } = getLookaheadPermissions(scheduleStatus ?? '');
+
   const overallStatus = task ? getOverallStatusInfo(task.constraints, task.progress) : null;
   const content = task && overallStatus ? (
         <div className="flex flex-col h-full bg-gray-50">
@@ -326,73 +329,67 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                 <div className="mb-6">
                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 pt-6">Production Quantities</h3>
                     <div className="px-4 py-0 bg-gray-50 rounded-lg space-y-4">
-                        {/* Planned and Actual: editable rows in draft, side-by-side in read view */}
-                        {isDraft ? (
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Planned Qty</label>
-                                <div className="flex gap-2 w-full min-w-0">
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        value={plannedInputValue}
-                                        onChange={(e) => {
-                                            const raw = e.target.value;
-                                            setPlannedInputValue(raw);
-                                            const v = parseFloat(raw);
-                                            if (onUpdatePlannedQuantity && (raw === '' || (!isNaN(v) && v >= 0))) {
-                                                onUpdatePlannedQuantity(task.id, raw === '' ? 0 : v, getQuantityUnit(task));
-                                            }
-                                        }}
-                                        onBlur={() => {
-                                            const v = parseFloat(plannedInputValue);
-                                            if (isNaN(v) || v < 0) setPlannedInputValue(getTotalPlannedQuantity(task) > 0 ? String(getTotalPlannedQuantity(task)) : '');
-                                        }}
-                                        placeholder="Enter planned"
-                                        className="flex-1 min-w-0 w-24 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                    <select
-                                        value={getQuantityUnit(task)}
-                                        onChange={(e) => onUpdatePlannedQuantity?.(task.id, parseFloat(plannedInputValue) || getTotalPlannedQuantity(task) || 0, e.target.value)}
-                                        className="flex-shrink-0 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                        {['EA', 'CY', 'LF', 'SF', 'TON', 'CF'].map(u => (
-                                            <option key={u} value={u}>{u}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {onUpdatePlannedQuantity && getTotalPlannedQuantity(task) > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onUpdatePlannedQuantity(task.id, getTotalPlannedQuantity(task), getQuantityUnit(task))}
-                                        className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
-                                    >
-                                        Evenly distribute
-                                    </button>
-                                )}
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Actual Qty</label>
-                                    <div className="font-semibold text-blue-700 px-3 py-2 bg-white rounded-md border border-gray-200">
-                                        {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
+                        {/* Planned Qty */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Planned Qty</label>
+                            {canEditPlannedQty ? (
+                                <>
+                                    <div className="flex gap-2 w-full min-w-0">
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step={0.01}
+                                            value={plannedInputValue}
+                                            onChange={(e) => {
+                                                const raw = e.target.value;
+                                                setPlannedInputValue(raw);
+                                                const v = parseFloat(raw);
+                                                if (onUpdatePlannedQuantity && (raw === '' || (!isNaN(v) && v >= 0))) {
+                                                    onUpdatePlannedQuantity(task.id, raw === '' ? 0 : v, getQuantityUnit(task));
+                                                }
+                                            }}
+                                            onBlur={() => {
+                                                const v = parseFloat(plannedInputValue);
+                                                if (isNaN(v) || v < 0) setPlannedInputValue(getTotalPlannedQuantity(task) > 0 ? String(getTotalPlannedQuantity(task)) : '');
+                                            }}
+                                            placeholder="Enter planned"
+                                            className="flex-1 min-w-0 w-24 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                        <select
+                                            value={getQuantityUnit(task)}
+                                            onChange={(e) => onUpdatePlannedQuantity?.(task.id, parseFloat(plannedInputValue) || getTotalPlannedQuantity(task) || 0, e.target.value)}
+                                            className="flex-shrink-0 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        >
+                                            {['EA', 'CY', 'LF', 'SF', 'TON', 'CF'].map(u => (
+                                                <option key={u} value={u}>{u}</option>
+                                            ))}
+                                        </select>
                                     </div>
+                                    {onUpdatePlannedQuantity && getTotalPlannedQuantity(task) > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onUpdatePlannedQuantity(task.id, getTotalPlannedQuantity(task), getQuantityUnit(task))}
+                                            className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
+                                        >
+                                            Evenly distribute
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="font-semibold text-gray-800 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
+                                    {formatQuantityDisplay(getTotalPlannedQuantity(task))} {getQuantityUnit(task)}
+                                    {task.productionQuantity?.plannedLocked && (
+                                        <span className="ml-1 text-[10px] text-amber-600 font-normal">(locked)</span>
+                                    )}
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Planned Qty</label>
-                                    <div className="font-semibold text-gray-800 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
-                                        {formatQuantityDisplay(getTotalPlannedQuantity(task))} {getQuantityUnit(task)}
-                                        {task.productionQuantity?.plannedLocked && (
-                                            <span className="ml-1 text-[10px] text-amber-600 font-normal">(locked)</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Actual Qty</label>
-                                    <div className="font-semibold text-blue-700 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
-                                        {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
-                                    </div>
+                            )}
+                        </div>
+                        {/* Actual Qty Section */}
+                        {showActualQtySection && (
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Actual Qty</label>
+                                <div className="font-semibold text-blue-700 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
+                                    {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
                                 </div>
                             </div>
                         )}
@@ -420,7 +417,8 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                                 {getEffectiveDailyMetrics(task).map((m) => {
                                                     const planVal = m.quantity?.plan ?? 0;
                                                     const actualVal = m.quantity?.actual ?? 0;
-                                                    const canEdit = isDraft && onUpdateDailyQuantity;
+                                                    const canEdit = (canEditPlannedQty || canEditActualQty) && !!onUpdateDailyQuantity;
+                                                    const canEditActual = canEditActualQty && !!onUpdateDailyQuantity;
                                                     return (
                                                         <tr key={m.date} className="border-t border-gray-100">
                                                             <td className="px-2 py-1 text-gray-700 truncate align-middle" title={formatDisplayDate(m.date)}>{formatDisplayDate(m.date)}</td>
@@ -442,7 +440,7 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                                                 )}
                                                             </td>
                                                             <td className="px-1 py-1 text-right align-middle">
-                                                                {canEdit ? (
+                                                                {canEditActual ? (
                                                                     <input
                                                                         type="number"
                                                                         min={0}
