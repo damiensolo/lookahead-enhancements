@@ -108,11 +108,10 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
   const overallStatus = getOverallStatusInfo(task);
   const progressPercent = task.manHours.budget > 0 ? (task.manHours.actual / task.manHours.budget) * 100 : 0;
 
-  // Right pane qty display: dayPanelActualEditable is always false — both fields are read-only.
-  // showActualQtySection indicates active state; in draft/in_review show 0 for actual.
-  const { showActualQtySection } = getLookaheadPermissions(scheduleStatus ?? '');
+  const { showActualQtySection, canEnterDayActual } = getLookaheadPermissions(scheduleStatus ?? '');
   const qtyPlan = metricData?.quantity?.plan ?? 0;
   const qtyActual = showActualQtySection ? (metricData?.quantity?.actual ?? 0) : 0;
+  const actualEditable = canEnterDayActual && !!onUpdateDailyQuantity;
 
   const content = (
         <div className="flex flex-col h-full bg-gray-50">
@@ -167,16 +166,28 @@ const DailyMetricsPanel: React.FC<DailyMetricsPanelProps> = ({ data, onClose, on
                     <span>Actual</span>
                 </div>
                 <div className="divide-y divide-gray-200 text-sm">
-                    {/* Quantity — planned and actual are always read-only in the right pane
-                        (dayPanelActualEditable is always false per permission model) */}
                     <div className="grid grid-cols-3 items-center py-3">
                         <div className="font-semibold text-gray-700">Quantity <span className="text-xs text-gray-400 font-normal">{unit}</span></div>
                         <div className="text-gray-600">
                             {qtyPlan > 0 ? formatQuantityDisplay(qtyPlan) : '—'}
                         </div>
-                        <div className={`font-bold ${showActualQtySection ? (qtyActual < qtyPlan ? 'text-red-600' : qtyActual > qtyPlan ? 'text-green-600' : 'text-blue-600') : 'text-gray-400'}`}>
-                            {formatQuantityDisplay(qtyActual)}
-                        </div>
+                        {actualEditable ? (
+                            <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={Math.round(qtyActual)}
+                                onChange={(e) => {
+                                    const v = Math.round(parseFloat(e.target.value));
+                                    if (!isNaN(v) && v >= 0) onUpdateDailyQuantity!(task.id, dateString, qtyPlan, v);
+                                }}
+                                className="w-full py-1 px-1.5 text-right text-sm font-bold border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-blue-700"
+                            />
+                        ) : (
+                            <div className={`font-bold ${showActualQtySection ? (qtyActual < qtyPlan ? 'text-red-600' : qtyActual > qtyPlan ? 'text-green-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                                {formatQuantityDisplay(qtyActual)}
+                            </div>
+                        )}
                     </div>
                     <MetricRow
                         label="Hours"

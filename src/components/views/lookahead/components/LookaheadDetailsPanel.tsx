@@ -427,10 +427,10 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                                                     <input
                                                                         type="number"
                                                                         min={0}
-                                                                        step={0.01}
-                                                                        value={planVal}
+                                                                        step={1}
+                                                                        value={Math.round(planVal)}
                                                                         onChange={(e) => {
-                                                                            const v = parseFloat(e.target.value);
+                                                                            const v = Math.round(parseFloat(e.target.value));
                                                                             if (!isNaN(v) && v >= 0) onUpdateDailyQuantity(task.id, m.date, v, actualVal);
                                                                         }}
                                                                         className="w-full max-w-full min-w-0 py-1 px-1.5 text-right text-xs border border-gray-300 rounded box-border"
@@ -445,10 +445,10 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                                                         type="number"
                                                                         min={0}
                                                                         max={getMaxActualForDay(task, m.date)}
-                                                                        step={0.01}
-                                                                        value={actualVal}
+                                                                        step={1}
+                                                                        value={Math.round(actualVal)}
                                                                         onChange={(e) => {
-                                                                            const v = parseFloat(e.target.value);
+                                                                            const v = Math.round(parseFloat(e.target.value));
                                                                             if (!isNaN(v) && v >= 0) onUpdateDailyQuantity(task.id, m.date, planVal, v);
                                                                         }}
                                                                         className="w-full max-w-full min-w-0 py-1 px-1.5 text-right text-xs border border-gray-300 rounded box-border font-medium text-blue-700"
@@ -488,11 +488,20 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                       </button>
                     </div>
                   ) : commitment?.status === 'committed' ? (
-                    <p className="text-sm text-green-700 font-medium">Committed{commitment.committedAt ? ` at ${new Date(commitment.committedAt).toLocaleString()}` : ''}.</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-green-700 font-medium">Committed{commitment.committedAt ? ` on ${new Date(commitment.committedAt).toLocaleDateString()}` : ''}.</p>
+                      <button type="button" onClick={onOpenCommitmentModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View response →</button>
+                    </div>
                   ) : commitment?.status === 'proposed' ? (
-                    <p className="text-sm text-blue-700">Proposed dates: {commitment.proposedStartDate} – {commitment.proposedFinishDate}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-amber-700">Proposed: {commitment.proposedStartDate} – {commitment.proposedFinishDate}</p>
+                      <button type="button" onClick={onOpenCommitmentModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View response →</button>
+                    </div>
                   ) : commitment?.status === 'rejected' ? (
-                    <p className="text-sm text-red-700">Rejected: {commitment.rejectionReason}{commitment.rejectionComment ? ` – ${commitment.rejectionComment}` : ''}{commitment.rejectedAt ? ` at ${new Date(commitment.rejectedAt).toLocaleString()}` : ''}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-red-700">Rejected: {commitment.rejectionReason}</p>
+                      <button type="button" onClick={onOpenCommitmentModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View response →</button>
+                    </div>
                   ) : null}
                 </div>
               </div>

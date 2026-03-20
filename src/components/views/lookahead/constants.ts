@@ -26,6 +26,20 @@ export const REJECTION_REASONS = [
 ] as const;
 export const REJECTION_REASON_UNANSWERED_RFI = 'unanswered_rfi';
 
+/** Expanded rejection / propose-reason list used in the SC In-Review modal (9 categories). */
+export const SC_REJECTION_REASONS = [
+  { code: 'unanswered_rfi', label: 'Unanswered RFI' },
+  { code: 'material_not_available', label: 'Material not available' },
+  { code: 'equipment_not_available', label: 'Equipment not available' },
+  { code: 'crew_not_available', label: 'Crew not available' },
+  { code: 'predecessor_incomplete', label: 'Predecessor task incomplete' },
+  { code: 'site_access', label: 'Site access not ready' },
+  { code: 'design_revision', label: 'Design / drawing revision pending' },
+  { code: 'safety_concern', label: 'Safety concern' },
+  { code: 'other', label: 'Other' },
+] as const;
+export const SC_REJECTION_REASON_OTHER = 'other';
+
 export const PPC_DATA = [82, 85, 78, 88, 92, 90]; // Last 6 weeks
 
 export const MOCK_WEATHER: WeatherForecast[] = [

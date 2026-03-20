@@ -17,7 +17,14 @@
       "mcp__ide__getDiagnostics",
       "Bash(netstat -ano)",
       "Bash(findstr :3000)",
-      "Bash(find C:UsersdamieProjectslookahead-enhancementssrc -type f -name *.css -o -name *.scss)"
+      "Bash(find C:UsersdamieProjectslookahead-enhancementssrc -type f -name *.css -o -name *.scss)",
+      "Bash(find /c/Users/damie/Projects/lookahead-enhancements/src -type f \\\\\\(-name *Review* -o -name *review* -o -name *Adjustment* -o -name *adjustment* \\\\\\))",
+      "Bash(/tmp/summary.txt:*)",
+      "Read(//tmp/**)",
+      "Bash(tasklist)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(npx vite:*)",
+      "Bash(grep -rn \"slate-\\\\|from ''''.*demo\\\\|DemoStore\\\\|useDemoStore\" src/components/)"
     ]
   }
 }

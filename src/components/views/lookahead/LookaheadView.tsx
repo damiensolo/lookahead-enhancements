@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS, TaskCommitmentStatus, TaskAdjustmentProposal } from './types';
+import { LookaheadTask, Constraint, ConstraintStatus, ConstraintType, WeatherForecast, ScheduleStatus, CONTRACTORS, TaskCommitmentStatus, TaskAdjustmentProposal, CrewMember } from './types';
 import { PLANNER_TASKS, MOCK_WEATHER, MASTER_SCHEDULE_TASKS, MOCK_PROJECT_CREW, PROJECT_COMPANY_NAMES } from './constants';
 import { parseLookaheadDate, getDaysDiff, addDays, formatDateISO, formatDisplayDate } from '../../../lib/dateUtils';
 import { ChevronDownIcon, ChevronRightIcon, DocumentIcon, SunIcon, CloudIcon, CloudRainIcon, PlusIcon, ListTreeIcon, TrashIcon, HistoryIcon, PublicLinkIcon, LinkIcon, HardHatIcon, HandshakeIcon, AlertTriangleIcon, OctagonXIcon, PanelLeftIcon, PanelRightIcon, XIcon, MessageSquareIcon } from '../../common/Icons';
@@ -13,7 +13,7 @@ import { CreateLookaheadModal } from './components/CreateLookaheadModal';
 import { FieldBreakdownModal } from './components/FieldBreakdownModal';
 import { AddCrewModal } from './components/AddCrewModal';
 import { DeltasModal } from './components/DeltasModal';
-import { CommitmentModal } from './components/CommitmentModal';
+import { ScCommitmentModal } from './components/ScCommitmentModal';
 import ChatPanel from './components/ChatPanel';
 import { ClashResolutionModal } from './components/ClashResolutionModal';
 import ProgressCell from './components/ProgressCell';
@@ -963,21 +963,21 @@ const LookaheadView: React.FC = () => {
                 if (status === 'committed') {
                     return (
                         <div className="flex items-center justify-center w-full">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-green-700 bg-green-50 border border-green-200">Committed</span>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setTaskForCommitmentModal(task); }} className="px-2 py-0.5 rounded-full text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-colors">Committed</button>
                         </div>
                     );
                 }
                 if (status === 'rejected') {
                     return (
                         <div className="flex items-center justify-center w-full">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-red-700 bg-red-50 border border-red-200">Rejected</span>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setTaskForCommitmentModal(task); }} className="px-2 py-0.5 rounded-full text-[10px] font-medium text-red-700 bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 hover:border-red-300 transition-colors">Rejected</button>
                         </div>
                     );
                 }
                 if (status === 'proposed') {
                     return (
                         <div className="flex items-center justify-center w-full">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200">Proposed</span>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setTaskForCommitmentModal(task); }} className="px-2 py-0.5 rounded-full text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition-colors">Proposed</button>
                         </div>
                     );
                 }
@@ -1327,6 +1327,8 @@ const LookaheadView: React.FC = () => {
                     onCommit={(taskId) => commitTask(activeSchedule.id, taskId, scCompany)}
                     onReject={(taskId, payload) => rejectTask(activeSchedule.id, taskId, payload, scCompany)}
                     onPropose={(taskId, payload) => proposeTaskAdjustment(activeSchedule.id, taskId, payload, scCompany)}
+                    projectCrew={MOCK_PROJECT_CREW}
+                    onAssignCrew={handleUpdateAssignedCrew}
                 />
             ) : (
                 <>
@@ -1658,14 +1660,45 @@ const LookaheadView: React.FC = () => {
                         onDispute={(taskId, payload) => { gcMarkDisputed(activeSchedule.id, taskId, payload); setTaskForGcReviewModal(null); }}
                     />
 
-                    <CommitmentModal
+                    <ScCommitmentModal
                         isOpen={!!taskForCommitmentModal}
                         onClose={() => setTaskForCommitmentModal(null)}
                         task={taskForCommitmentModal ? (findTaskById(plannerTasks, taskForCommitmentModal.id) ?? taskForCommitmentModal) : null}
                         commitment={taskForCommitmentModal ? commitmentByTaskId[taskForCommitmentModal.id] : null}
-                        onSetCommitment={(state) => taskForCommitmentModal && setCommitment(taskForCommitmentModal.id, state)}
-                        addProjectRisk={addProjectRisk}
-                        onOpenAddCrew={activeSchedule.status === ScheduleStatus.Active && MOCK_PROJECT_CREW.length > 0 ? (taskId, dateString) => setAddCrewContext({ taskId, dateString }) : undefined}
+                        onCommit={({ plannedQty, equipMaterialVerified }) => {
+                            if (!taskForCommitmentModal) return;
+                            setCommitment(taskForCommitmentModal.id, {
+                                status: 'committed',
+                                committedAt: new Date().toISOString(),
+                                equipmentMaterialVerified: equipMaterialVerified,
+                                plannedQtyAccepted: plannedQty > 0,
+                            });
+                        }}
+                        onReject={({ rejectionReason, subNotes }) => {
+                            if (!taskForCommitmentModal) return;
+                            const resolvedTask = findTaskById(plannerTasks, taskForCommitmentModal.id) ?? taskForCommitmentModal;
+                            setCommitment(taskForCommitmentModal.id, {
+                                status: 'rejected',
+                                rejectionReason,
+                                rejectionComment: subNotes,
+                                rejectedAt: new Date().toISOString(),
+                            });
+                            if (rejectionReason === 'Unanswered RFI') {
+                                addProjectRisk({ taskId: resolvedTask.id, taskName: resolvedTask.name, reason: 'Unanswered RFI' });
+                            }
+                        }}
+                        onPropose={(payload) => {
+                            if (!taskForCommitmentModal) return;
+                            setCommitment(taskForCommitmentModal.id, {
+                                status: 'proposed',
+                                proposedStartDate: payload.proposedStartDate,
+                                proposedFinishDate: payload.proposedEndDate,
+                                rejectionReason: payload.rejectionReason,
+                                rejectionComment: payload.subNotes,
+                            });
+                        }}
+                        projectCrew={MOCK_PROJECT_CREW}
+                        onAssignCrew={(taskId, dateString, crewIds) => handleUpdateAssignedCrew(taskId, dateString, crewIds)}
                     />
 
                     <ClashResolutionModal
@@ -1691,7 +1724,9 @@ const SubReviewCards: React.FC<{
     onCommit: (taskId: string | number) => void;
     onReject: (taskId: string | number, payload: { rejectionReason: string; subNotes?: string }) => void;
     onPropose: (taskId: string | number, payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
-}> = ({ scCompany, tasks, onCommit, onReject, onPropose }) => {
+    projectCrew?: CrewMember[];
+    onAssignCrew?: (taskId: string | number, dateString: string, crewIds: string[]) => void;
+}> = ({ scCompany, tasks, onCommit, onReject, onPropose, projectCrew = [], onAssignCrew }) => {
     const assigned = useMemo(() => {
         const want = (scCompany ?? '').trim().toLowerCase();
         return tasks.filter(t => (t.contractor ?? '').trim().toLowerCase() === want);
@@ -1713,9 +1748,11 @@ const SubReviewCards: React.FC<{
                     <SubTaskCard
                         key={String(task.id)}
                         task={task}
-                        onCommit={() => onCommit(task.id)}
+                        onCommit={(payload) => onCommit(task.id)}
                         onReject={(payload) => onReject(task.id, payload)}
                         onPropose={(payload) => onPropose(task.id, payload)}
+                        projectCrew={projectCrew}
+                        onAssignCrew={onAssignCrew}
                     />
                 ))}
             </div>
@@ -1725,16 +1762,13 @@ const SubReviewCards: React.FC<{
 
 const SubTaskCard: React.FC<{
     task: LookaheadTask;
-    onCommit: () => void;
+    onCommit: (payload: { plannedQty: number; equipMaterialVerified: boolean; notes?: string }) => void;
     onReject: (payload: { rejectionReason: string; subNotes?: string }) => void;
     onPropose: (payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
-}> = ({ task, onCommit, onReject, onPropose }) => {
-    const [mode, setMode] = useState<'none' | 'adjust' | 'reject'>(() => 'none');
-    const [start, setStart] = useState(task.startDate);
-    const [end, setEnd] = useState(task.finishDate);
-    const [crew, setCrew] = useState<number>(task.crewAssigned ?? 0);
-    const [notes, setNotes] = useState('');
-    const [reason, setReason] = useState('');
+    projectCrew?: CrewMember[];
+    onAssignCrew?: (taskId: string | number, dateString: string, crewIds: string[]) => void;
+}> = ({ task, onCommit, onReject, onPropose, projectCrew = [], onAssignCrew }) => {
+    const [modalOpen, setModalOpen] = useState(false);
 
     const status = task.commitmentStatus ?? 'pending';
     const meta = commitmentMeta(status);
@@ -1742,119 +1776,57 @@ const SubTaskCard: React.FC<{
     const reopened = status === 'gc_revised';
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 truncate" title={task.name}>{task.name}</div>
-                        <div className="text-xs text-gray-600 mt-0.5">{task.location || '—'} · {task.taskCode}</div>
-                    </div>
-                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${meta.classes}`}>
-                        {meta.label}
-                    </span>
-                </div>
-                {reopened && (
-                    <div className="mt-2 text-xs font-medium text-purple-800 bg-purple-50 border border-purple-200 rounded-md px-2 py-1">
-                        GC has revised this task — please review.
-                    </div>
-                )}
-            </div>
-
-            <div className="px-4 py-3 text-sm">
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-                    <div><span className="text-gray-500">Proposed start</span><div className="font-medium">{task.startDate}</div></div>
-                    <div><span className="text-gray-500">Proposed end</span><div className="font-medium">{task.finishDate}</div></div>
-                    <div><span className="text-gray-500">Crew</span><div className="font-medium">{task.crewAssigned ?? 0}</div></div>
-                    <div><span className="text-gray-500">Materials</span><div className="font-medium truncate" title={task.adjustmentProposal?.proposedMaterialNotes ?? ''}>{task.adjustmentProposal?.proposedMaterialNotes ? 'See notes' : '—'}</div></div>
-                </div>
-            </div>
-
-            <div className="px-4 pb-4">
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        disabled={locked}
-                        onClick={onCommit}
-                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        Commit
-                    </button>
-                    <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => setMode(m => (m === 'adjust' ? 'none' : 'adjust'))}
-                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-amber-100 text-amber-900 border border-amber-200 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        Propose Adjustment
-                    </button>
-                    <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => setMode(m => (m === 'reject' ? 'none' : 'reject'))}
-                        className="flex-1 px-3 py-2 text-xs font-bold rounded-md bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        Reject
-                    </button>
-                </div>
-
-                {mode === 'adjust' && (
-                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                            <label className="text-xs text-amber-900">
-                                Start
-                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                            </label>
-                            <label className="text-xs text-amber-900">
-                                End
-                                <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                            </label>
+        <>
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate" title={task.name}>{task.name}</div>
+                            <div className="text-xs text-gray-600 mt-0.5">{task.location || '—'} · {task.taskCode}</div>
                         </div>
-                        <label className="text-xs text-amber-900">
-                            Crew size
-                            <input type="number" value={crew} onChange={(e) => setCrew(parseInt(e.target.value || '0', 10))} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                        </label>
-                        <label className="text-xs text-amber-900">
-                            Notes (optional)
-                            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                        </label>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                onPropose({ proposedStartDate: start, proposedEndDate: end, proposedCrewSize: crew, subNotes: notes || undefined });
-                                setMode('none');
-                            }}
-                            className="w-full px-3 py-2 text-xs font-bold rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                        >
-                            Submit Response
-                        </button>
+                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${meta.classes}`}>
+                            {meta.label}
+                        </span>
                     </div>
-                )}
+                    {reopened && (
+                        <div className="mt-2 text-xs font-medium text-purple-800 bg-purple-50 border border-purple-200 rounded-md px-2 py-1">
+                            GC has revised this task — please review.
+                        </div>
+                    )}
+                </div>
 
-                {mode === 'reject' && (
-                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
-                        <label className="text-xs text-red-900">
-                            Reason (required)
-                            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-red-200 rounded bg-white" />
-                        </label>
-                        <label className="text-xs text-red-900">
-                            Notes (optional)
-                            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-red-200 rounded bg-white" />
-                        </label>
-                        <button
-                            type="button"
-                            disabled={!reason.trim()}
-                            onClick={() => {
-                                onReject({ rejectionReason: reason.trim(), subNotes: notes || undefined });
-                                setMode('none');
-                            }}
-                            className="w-full px-3 py-2 text-xs font-bold rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Submit Response
-                        </button>
+                <div className="px-4 py-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                        <div><span className="text-gray-500">Proposed start</span><div className="font-medium">{task.startDate}</div></div>
+                        <div><span className="text-gray-500">Proposed end</span><div className="font-medium">{task.finishDate}</div></div>
+                        <div><span className="text-gray-500">Crew</span><div className="font-medium">{task.crewAssigned ?? 0}</div></div>
+                        <div><span className="text-gray-500">Quantity</span><div className="font-medium">{task.productionQuantity ? `${task.productionQuantity.planned} ${task.productionQuantity.unit}` : '—'}</div></div>
                     </div>
-                )}
+                </div>
+
+                <div className="px-4 pb-4">
+                    <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => setModalOpen(true)}
+                        className="w-full px-3 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {locked ? (status === 'committed' ? 'Committed' : 'Accepted') : 'Review & Respond'}
+                    </button>
+                </div>
             </div>
-        </div>
+
+            <ScCommitmentModal
+                isOpen={modalOpen}
+                onClose={() => setModalOpen(false)}
+                task={task}
+                onCommit={onCommit}
+                onReject={onReject}
+                onPropose={onPropose}
+                projectCrew={projectCrew}
+                onAssignCrew={onAssignCrew}
+            />
+        </>
     );
 };
 
