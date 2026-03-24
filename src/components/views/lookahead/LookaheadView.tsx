@@ -217,7 +217,14 @@ const LookaheadView: React.FC = () => {
     const [activeClash, setActiveClash] = useState<LocationClash | null>(null);
 
     useEffect(() => {
-        setClashes(detectLocationClashes(plannerTasks));
+        // Re-detect clashes but preserve any resolutions the user has already saved.
+        setClashes(prev => {
+            const detected = detectLocationClashes(plannerTasks);
+            return detected.map(newClash => {
+                const existing = prev.find(c => c.id === newClash.id);
+                return existing ? { ...newClash, status: existing.status, category: existing.category } : newClash;
+            });
+        });
     }, [plannerTasks]);
 
     const clashesByTaskId = useMemo(() => {
@@ -231,6 +238,44 @@ const LookaheadView: React.FC = () => {
         });
         return map;
     }, [clashes]);
+
+    /**
+     * Set of task IDs that have at least one unresolved clash anywhere in their subtree.
+     * Parent tasks bubble up from their children so the warning icon shows at every level.
+     */
+    const tasksWithUnresolvedClash = useMemo(() => {
+        const unresolvedIds = new Set<string | number>();
+        clashes.forEach(c => {
+            if (c.status !== 'Resolved') c.taskIds.forEach(id => unresolvedIds.add(id));
+        });
+        const result = new Set<string | number>();
+        const walk = (tasks: LookaheadTask[]): boolean => {
+            let any = false;
+            for (const t of tasks) {
+                const childHas = t.children?.length ? walk(t.children) : false;
+                if (unresolvedIds.has(t.id) || childHas) {
+                    result.add(t.id);
+                    any = true;
+                }
+            }
+            return any;
+        };
+        walk(plannerTasks);
+        return result;
+    }, [clashes, plannerTasks]);
+
+    /** Returns the first unresolved clash for a task or any of its descendants. */
+    const getFirstUnresolvedClash = useCallback((task: LookaheadTask): LocationClash | null => {
+        const own = (clashesByTaskId.get(task.id) ?? []).find(c => c.status !== 'Resolved');
+        if (own) return own;
+        if (task.children?.length) {
+            for (const child of task.children) {
+                const found = getFirstUnresolvedClash(child);
+                if (found) return found;
+            }
+        }
+        return null;
+    }, [clashesByTaskId]);
 
     /** For SC view, show only tasks for scCompany; for GC show all. */
     const tasksForDisplay = useMemo(() => {
@@ -259,7 +304,7 @@ const LookaheadView: React.FC = () => {
     const [taskForGcReviewModal, setTaskForGcReviewModal] = useState<LookaheadTask | null>(null);
     const [isPanelClosing, setIsPanelClosing] = useState(false);
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
-    const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('chat');
+    const [rightPanelView, setRightPanelView] = useState<'details' | 'chat'>('details');
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
     const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
 
@@ -678,20 +723,28 @@ const LookaheadView: React.FC = () => {
             return tasks.map(task => {
                 if (task.id === taskId) {
                     if (task.taskType === 'Field Task') {
-                        return {
-                            ...task,
-                            fieldStartDate: newStart,
-                            fieldFinishDate: newFinish,
-                        };
+                        return { ...task, fieldStartDate: newStart, fieldFinishDate: newFinish };
                     }
-                    return {
-                        ...task,
-                        startDate: newStart,
-                        finishDate: newFinish,
-                    };
+                    return { ...task, startDate: newStart, finishDate: newFinish };
                 }
                 if (task.children) {
-                    return { ...task, children: updateRecursively(task.children) };
+                    const updatedChildren = updateRecursively(task.children);
+                    // If a field child's dates changed, propagate min/max field range up to parent
+                    if (updatedChildren !== task.children) {
+                        const fieldKids = updatedChildren.filter(c => c.taskType === 'Field Task');
+                        if (fieldKids.length > 0) {
+                            const minStart = fieldKids.reduce((m, c) => {
+                                const d = c.fieldStartDate || c.startDate;
+                                return d < m ? d : m;
+                            }, fieldKids[0].fieldStartDate || fieldKids[0].startDate);
+                            const maxFinish = fieldKids.reduce((m, c) => {
+                                const d = c.fieldFinishDate || c.finishDate;
+                                return d > m ? d : m;
+                            }, fieldKids[0].fieldFinishDate || fieldKids[0].finishDate);
+                            return { ...task, children: updatedChildren, fieldStartDate: minStart, fieldFinishDate: maxFinish };
+                        }
+                    }
+                    return { ...task, children: updatedChildren };
                 }
                 return task;
             });
@@ -886,8 +939,8 @@ const LookaheadView: React.FC = () => {
                 );
             case 'name': {
                 const hasBlockingConstraints = task.constraints.some(c => c.severity === 'Blocking');
-                const taskClashes = clashesByTaskId.get(task.id) ?? [];
-                const unresolvedClash = taskClashes.find(c => c.status === 'Unresolved' || c.status === 'Accepted risk');
+                const hasUnresolvedInSubtree = tasksWithUnresolvedClash.has(task.id);
+                const unresolvedClash = hasUnresolvedInSubtree ? getFirstUnresolvedClash(task) : null;
 
                 const taskDeltas = activeScheduleId ? deltas[activeScheduleId] || [] : [];
                 const taskDelta = taskDeltas.find(d => String(d.taskId) === String(task.id));
@@ -1397,7 +1450,14 @@ const LookaheadView: React.FC = () => {
                                 <MessageSquareIcon className="w-5 h-5" />
                             </button>
                             <button
-                                onClick={() => setIsRightPanelOpen(prev => !prev)}
+                                onClick={() => {
+                                    if (isRightPanelOpen) {
+                                        setIsRightPanelOpen(false);
+                                    } else {
+                                        setRightPanelView('details');
+                                        setIsRightPanelOpen(true);
+                                    }
+                                }}
                                 className={`p-1.5 rounded-md transition-colors ${isRightPanelOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
                                 title={isRightPanelOpen ? "Collapse right panel" : "Expand right panel"}
                             >
@@ -1744,7 +1804,33 @@ const LookaheadView: React.FC = () => {
                         isOpen={!!activeClash}
                         onClose={() => setActiveClash(null)}
                         onSave={(updated) => {
-                            setClashes(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+                            setClashes(prev => {
+                                const next = prev.map(c => c.id === updated.id ? updated : c);
+                                // If user resolved/accepted at the parent task level, cascade to all
+                                // descendant task clashes so subtasks don't keep showing the icon.
+                                if (updated.status === 'Resolved' || updated.status === 'Accepted risk') {
+                                    const descendantIds = new Set<string | number>();
+                                    updated.taskIds.forEach(tid => {
+                                        const t = findTaskById(plannerTasks, tid);
+                                        if (t?.children?.length) {
+                                            const collect = (task: LookaheadTask) => {
+                                                task.children?.forEach(c => { descendantIds.add(c.id); collect(c); });
+                                            };
+                                            collect(t);
+                                        }
+                                    });
+                                    if (descendantIds.size > 0) {
+                                        return next.map(c => {
+                                            if (c.id === updated.id) return c;
+                                            if (c.taskIds.some(id => descendantIds.has(id))) {
+                                                return { ...c, status: updated.status, category: updated.category ?? c.category };
+                                            }
+                                            return c;
+                                        });
+                                    }
+                                }
+                                return next;
+                            });
                         }}
                     />
                 </>

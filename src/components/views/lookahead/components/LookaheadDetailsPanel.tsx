@@ -410,7 +410,7 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                     )}
 
                     {/* Metadata grid */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 3fr' }}>
                         {/* Row 1: Cost Code | Contractor */}
                         <div>
                             <div className="text-xs text-gray-500">Cost Code</div>
@@ -468,32 +468,48 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                             </div>
                         )}
                         {/* Schedule Analysis — full width */}
-                        <div className="col-span-2">
-                            <div className="text-xs text-gray-500 mb-1">Schedule Analysis</div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between p-2 bg-white border border-black/5 rounded-lg">
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Planned</span>
-                                    <span className="text-sm font-medium text-zinc-600">{formatDisplayDate(task.startDate)} → {formatDisplayDate(task.finishDate)}</span>
+                        {(() => {
+                            // Derive effective field date range.
+                            // If this task has field-breakdown children, compute min start / max finish
+                            // from those children so the panel reflects their actual scheduled range.
+                            const fieldKids = task.children?.filter(c => c.taskType === 'Field Task') ?? [];
+                            const effFieldStart = fieldKids.length > 0
+                                ? fieldKids.reduce((m, c) => { const d = c.fieldStartDate || c.startDate; return d < m ? d : m; }, fieldKids[0].fieldStartDate || fieldKids[0].startDate)
+                                : (task.fieldStartDate || task.startDate);
+                            const effFieldFinish = fieldKids.length > 0
+                                ? fieldKids.reduce((m, c) => { const d = c.fieldFinishDate || c.finishDate; return d > m ? d : m; }, fieldKids[0].fieldFinishDate || fieldKids[0].finishDate)
+                                : (task.fieldFinishDate || task.finishDate);
+                            const fieldSlipped = effFieldStart > task.startDate || effFieldFinish > task.finishDate;
+                            const hasFieldData = effFieldStart !== task.startDate || effFieldFinish !== task.finishDate;
+                            return (
+                                <div className="col-span-2">
+                                    <div className="text-xs text-gray-500 mb-1">Schedule Analysis</div>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between p-2 bg-white border border-black/5 rounded-lg">
+                                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Planned</span>
+                                            <span className="text-sm font-medium text-zinc-600">{formatDisplayDate(task.startDate)} → {formatDisplayDate(task.finishDate)}</span>
+                                        </div>
+                                        {hasFieldData ? (
+                                            <div className={`flex items-center justify-between p-2 rounded-lg border ${fieldSlipped ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Field (Actual)</span>
+                                                <span className={`text-sm font-bold ${fieldSlipped ? 'text-red-600' : 'text-blue-700'}`}>
+                                                    {formatDisplayDate(effFieldStart)} → {formatDisplayDate(effFieldFinish)}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center p-2 bg-gray-50 border border-gray-100 rounded-lg">
+                                                <span className="text-[11px] text-gray-400">No field adjustments yet</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className={`flex items-center justify-between p-2 rounded-lg border ${
-                                    (task.fieldStartDate && task.fieldStartDate > task.startDate) || (task.fieldFinishDate && task.fieldFinishDate > task.finishDate)
-                                    ? 'bg-red-50 border-red-100'
-                                    : 'bg-blue-50 border-blue-100'
-                                }`}>
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Field (Actual)</span>
-                                    <span className={`text-sm font-bold ${
-                                        (task.fieldStartDate && task.fieldStartDate > task.startDate) || (task.fieldFinishDate && task.fieldFinishDate > task.finishDate)
-                                        ? 'text-red-600'
-                                        : 'text-blue-700'
-                                    }`}>
-                                        {formatDisplayDate(task.fieldStartDate || task.startDate)} → {formatDisplayDate(task.fieldFinishDate || task.finishDate)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                            );
+                        })()}
                     </div>
 
+                    {/* Production — merged progress + quantities */}
                     <div className="mb-6">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Production</h3>
                         {(() => {
                             const hasSubTasks = task.children && task.children.length > 0;
                             const isEditable = !hasSubTasks && onUpdateProgress;
@@ -503,21 +519,23 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                             const hasQty = plannedQty > 0;
                             return (
                                 <>
-                                    <div className="flex justify-between items-baseline mb-3">
-                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Task Progress</span>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-lg font-bold text-blue-600">{task.progress}%</span>
-                                            {hasQty && (
-                                                <>
-                                                    <span className="text-gray-300 text-sm">·</span>
-                                                    <span className="text-sm font-semibold text-gray-700">
-                                                        {formatQuantityDisplay(actualQty)}&thinsp;/&thinsp;{formatQuantityDisplay(plannedQty)}
-                                                        <span className="ml-1 text-xs font-normal text-gray-400">{unit}</span>
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
+                                    {/* Summary row: % + quantity fraction */}
+                                    <div className="flex justify-between items-baseline mb-2">
+                                        <span className="text-lg font-bold text-blue-600">{task.progress}%</span>
+                                        {hasQty && (
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-sm font-semibold text-gray-700">
+                                                    {formatQuantityDisplay(actualQty)}&thinsp;/&thinsp;{formatQuantityDisplay(plannedQty)}
+                                                </span>
+                                                <span className="text-xs text-gray-400">{unit}</span>
+                                                {task.productionQuantity?.plannedLocked && (
+                                                    <span className="text-[10px] text-amber-600">(locked)</span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {/* Progress bar or slider */}
                                     {isEditable ? (
                                         <div className="px-2 py-1">
                                             <ProgressSlider
@@ -540,89 +558,57 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                             )}
                                         </div>
                                     )}
-                                </>
-                            );
-                        })()}
-                    </div>
 
-                    <div className="mb-6">
-                        <div className="flex justify-between items-baseline mb-1">
-                          <span className="text-xs text-gray-500">Man-Hours Progress</span>
-                        </div>
-                        <ManHoursBar manHours={task.manHours} />
-                    </div>
-
-                    {/* Production Quantities & Daily Tracking */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 pt-6">Production Quantities</h3>
-                        <div className="px-4 py-0 bg-gray-50 rounded-lg space-y-4">
-                            {/* Planned Qty */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Planned Qty</label>
-                                {canEditPlannedQty ? (
-                                    <>
-                                        <div className="flex gap-2 w-full min-w-0">
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step={0.01}
-                                                value={plannedInputValue}
-                                                onChange={(e) => {
-                                                    const raw = e.target.value;
-                                                    setPlannedInputValue(raw);
-                                                    const v = parseFloat(raw);
-                                                    if (onUpdatePlannedQuantity && (raw === '' || (!isNaN(v) && v >= 0))) {
-                                                        onUpdatePlannedQuantity(task.id, raw === '' ? 0 : v, getQuantityUnit(task));
-                                                    }
-                                                }}
-                                                onBlur={() => {
-                                                    const v = parseFloat(plannedInputValue);
-                                                    if (isNaN(v) || v < 0) setPlannedInputValue(getTotalPlannedQuantity(task) > 0 ? String(getTotalPlannedQuantity(task)) : '');
-                                                }}
-                                                placeholder="Enter planned"
-                                                className="flex-1 min-w-0 w-24 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            />
-                                            <select
-                                                value={getQuantityUnit(task)}
-                                                onChange={(e) => onUpdatePlannedQuantity?.(task.id, parseFloat(plannedInputValue) || getTotalPlannedQuantity(task) || 0, e.target.value)}
-                                                className="flex-shrink-0 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            >
-                                                {['EA', 'CY', 'LF', 'SF', 'TON', 'CF'].map(u => (
-                                                    <option key={u} value={u}>{u}</option>
-                                                ))}
-                                            </select>
+                                    {/* Draft: set planned qty inputs */}
+                                    {canEditPlannedQty && (
+                                        <div className="mt-3 space-y-2">
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Set Planned Qty</label>
+                                            <div className="flex gap-2 w-full min-w-0">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step={0.01}
+                                                    value={plannedInputValue}
+                                                    onChange={(e) => {
+                                                        const raw = e.target.value;
+                                                        setPlannedInputValue(raw);
+                                                        const v = parseFloat(raw);
+                                                        if (onUpdatePlannedQuantity && (raw === '' || (!isNaN(v) && v >= 0))) {
+                                                            onUpdatePlannedQuantity(task.id, raw === '' ? 0 : v, getQuantityUnit(task));
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        const v = parseFloat(plannedInputValue);
+                                                        if (isNaN(v) || v < 0) setPlannedInputValue(getTotalPlannedQuantity(task) > 0 ? String(getTotalPlannedQuantity(task)) : '');
+                                                    }}
+                                                    placeholder="Enter planned"
+                                                    className="flex-1 min-w-0 w-24 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                />
+                                                <select
+                                                    value={getQuantityUnit(task)}
+                                                    onChange={(e) => onUpdatePlannedQuantity?.(task.id, parseFloat(plannedInputValue) || getTotalPlannedQuantity(task) || 0, e.target.value)}
+                                                    className="flex-shrink-0 px-3 py-2 text-sm border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                >
+                                                    {['EA', 'CY', 'LF', 'SF', 'TON', 'CF'].map(u => (
+                                                        <option key={u} value={u}>{u}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {onUpdatePlannedQuantity && getTotalPlannedQuantity(task) > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onUpdatePlannedQuantity(task.id, getTotalPlannedQuantity(task), getQuantityUnit(task))}
+                                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                                >
+                                                    Evenly distribute
+                                                </button>
+                                            )}
                                         </div>
-                                        {onUpdatePlannedQuantity && getTotalPlannedQuantity(task) > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => onUpdatePlannedQuantity(task.id, getTotalPlannedQuantity(task), getQuantityUnit(task))}
-                                                className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
-                                            >
-                                                Evenly distribute
-                                            </button>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="font-semibold text-gray-800 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
-                                        {formatQuantityDisplay(getTotalPlannedQuantity(task))} {getQuantityUnit(task)}
-                                        {task.productionQuantity?.plannedLocked && (
-                                            <span className="ml-1 text-[10px] text-amber-600 font-normal">(locked)</span>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            {/* Actual Qty Section */}
-                            {showActualQtySection && (
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Actual Qty</label>
-                                    <div className="font-semibold text-blue-700 px-2.5 py-1.5 text-sm bg-white rounded-md border border-gray-200">
-                                        {formatQuantityDisplay(getTotalActualQuantity(task))} {getQuantityUnit(task)}
-                                    </div>
-                                </div>
-                            )}
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Daily Plan vs Actual</label>
-                                <div className="rounded border border-gray-200 bg-white overflow-hidden">
+                                    )}
+
+                                    {/* Daily table */}
+                                    <div className="mt-3">
+                                    <div className="rounded border border-gray-200 bg-white overflow-hidden">
                                     {getEffectiveDailyMetrics(task).length === 0 ? (
                                         <p className="text-xs text-gray-500 py-6 px-4 text-center">No daily data. Enter planned qty to distribute.</p>
                                     ) : (
@@ -691,10 +677,20 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                                             </table>
                                         </div>
                                     )}
-                                </div>
-                            </div>
-                        </div>
+                                    </div>
+                                    </div>
+                                    </>
+                                );
+                            })()}
                     </div>
+
+                    <div className="mb-6">
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span className="text-xs text-gray-500">Man-Hours Progress</span>
+                        </div>
+                        <ManHoursBar manHours={task.manHours} />
+                    </div>
+
                   </div>
                 </div>
 

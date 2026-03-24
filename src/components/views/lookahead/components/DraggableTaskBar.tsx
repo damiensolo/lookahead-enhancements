@@ -128,26 +128,8 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({
         });
     });
 
-    // Stable mouseup handler.
-    const stableMouseUp = useRef(() => {
-        if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-        document.body.style.cursor = 'default';
-        document.body.style.userSelect = 'auto';
-        window.removeEventListener('mousemove', stableMouseMove.current);
-        window.removeEventListener('mouseup', stableMouseUp.current);
-
-        const init = dragInitRef.current;
-        dragInitRef.current = null;
-        lastDayDeltaRef.current = null;
-
-        setActiveDrag(prev => {
-            if (prev && init) {
-                const { newStart, newFinish } = computeDragDates(prev, prev.dayDelta);
-                onUpdateTaskRef.current(task.id, formatDateISO(newStart), formatDateISO(newFinish));
-            }
-            return null;
-        });
-    });
+    // Stable mouseup handler — initial value; overwritten below on every render via .current reassignment.
+    const stableMouseUp = useRef(() => { /* overwritten below */ });
 
     // Keep the task.id accessible inside the stable ref without re-creating it.
     const taskIdRef = useRef(task.id);
@@ -164,16 +146,17 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({
         window.removeEventListener('mouseup', stableMouseUp.current);
 
         const init = dragInitRef.current;
+        const lastDelta = lastDayDeltaRef.current;
         dragInitRef.current = null;
         lastDayDeltaRef.current = null;
 
-        setActiveDrag(prev => {
-            if (prev && init) {
-                const { newStart, newFinish } = computeDragDates(prev, prev.dayDelta);
-                onUpdateTaskRef.current(taskIdRef.current, formatDateISO(newStart), formatDateISO(newFinish));
-            }
-            return null;
-        });
+        // Call onUpdateTask directly (not inside a setState updater) so both
+        // setPlannerTasks and setActiveDrag(null) are batched in the same render.
+        if (init && lastDelta !== null) {
+            const { newStart, newFinish } = computeDragDates(init, lastDelta);
+            onUpdateTaskRef.current(taskIdRef.current, formatDateISO(newStart), formatDateISO(newFinish));
+        }
+        setActiveDrag(null);
     };
 
     stableMouseMove.current = (e: MouseEvent) => {
