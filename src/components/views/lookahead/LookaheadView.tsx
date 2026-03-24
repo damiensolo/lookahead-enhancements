@@ -38,7 +38,6 @@ const WeatherIcon: React.FC<{ icon: 'sun' | 'cloud' | 'rain' }> = ({ icon }) => 
     }
 };
 
-const DAY_WIDTH = 40;
 const LOOKAHEAD_BUFFER_DAYS = 2;
 const MAX_TIMELINE_DAYS_WITHOUT_PERIOD = 84; // Cap when schedule has no period to avoid excessive scroll
 
@@ -48,6 +47,24 @@ const getRowHeight = (density: DisplayDensity) => {
     case 'standard': return 40;
     case 'comfortable': return 50;
     default: return 34;
+  }
+};
+
+const getDayWidth = (density: DisplayDensity) => {
+  switch (density) {
+    case 'compact': return 28;
+    case 'standard': return 34;
+    case 'comfortable': return 40;
+    default: return 40;
+  }
+};
+
+const getHeaderHeights = (density: DisplayDensity) => {
+  switch (density) {
+    case 'compact':     return { weekRow: 22, dayRow: 34, weatherSection: 0 };
+    case 'standard':    return { weekRow: 26, dayRow: 42, weatherSection: 20 };
+    case 'comfortable': return { weekRow: 30, dayRow: 50, weatherSection: 28 };
+    default:            return { weekRow: 30, dayRow: 50, weatherSection: 28 };
   }
 };
 
@@ -448,6 +465,9 @@ const LookaheadView: React.FC = () => {
         return sum;
     }, [visiblePanelColumns]);
     const rowHeight = getRowHeight(displayDensity);
+    const dayWidth = getDayWidth(displayDensity);
+    const headerHeights = getHeaderHeights(displayDensity);
+    const totalHeaderHeight = headerHeights.weekRow + headerHeights.dayRow;
     const SPLIT_GRABBER_WIDTH = 4;
     const SPLIT_HIT_WIDTH = 12;
     const MIN_COL_WIDTH = 40;
@@ -698,7 +718,6 @@ const LookaheadView: React.FC = () => {
         setSelectedDay({ task, date, forecast });
         setRightPanelView('details');
         setIsRightPanelOpen(true);
-        setEditTrigger(null); // clear any pending digit trigger from before this click
     }, [weatherByDate]);
 
     const handleConstraintBadgeClick = useCallback((task: LookaheadTask) => {
@@ -1249,12 +1268,12 @@ const LookaheadView: React.FC = () => {
                 className={`group flex border-b border-gray-200 first:border-t transition-colors ${isSelected ? 'bg-blue-100' : isFieldTask ? 'bg-blue-50' : ''}`} 
                 style={{ height: `${rowHeight}px` }}
             >
-                <div className="relative flex flex-grow" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
+                <div className="relative flex flex-grow" style={{ minWidth: `${totalDays * dayWidth}px` }}>
                     <DraggableTaskBar
                         task={task}
                         projectStartDate={projectStartDate}
                         projectEndDate={projectEndDate}
-                        dayWidth={DAY_WIDTH}
+                        dayWidth={dayWidth}
                         onUpdateTask={handleUpdateTaskDates}
                         onDayClick={handleDayClick}
                         offsetLeft={0}
@@ -1404,10 +1423,10 @@ const LookaheadView: React.FC = () => {
                                     onScroll={() => syncVerticalScroll('left')}
                                 >
                                     <div className="sticky top-0 z-40 bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-t border-b border-gray-200 flex-shrink-0">
-                                        <div className="border-b border-gray-200" style={{ height: '30px' }}>
-                                            <div className="bg-gray-50 flex" style={{ width: `${totalLeftPanelWidth}px`, minHeight: '30px' }} />
+                                        <div className="border-b border-gray-200" style={{ height: `${headerHeights.weekRow}px` }}>
+                                            <div className="bg-gray-50 flex" style={{ width: `${totalLeftPanelWidth}px`, minHeight: `${headerHeights.weekRow}px` }} />
                                         </div>
-                                        <div className="flex" style={{ height: '50px' }}>
+                                        <div className="flex" style={{ height: `${headerHeights.dayRow}px` }}>
                                             <div className="flex bg-gray-50" style={{ width: `${totalLeftPanelWidth}px` }}>
                                                 {visiblePanelColumns.map((col, index) => (
                                                     <div
@@ -1458,11 +1477,11 @@ const LookaheadView: React.FC = () => {
                                 className="flex-1 overflow-auto min-w-0"
                                 onScroll={() => syncVerticalScroll('right')}
                             >
-                                <div className="relative" style={{ minWidth: `${totalDays * DAY_WIDTH}px` }}>
+                                <div className="relative" style={{ minWidth: `${totalDays * dayWidth}px` }}>
                                     {/* Background grid */}
                                     <div
-                                        className="absolute top-0 left-0 w-full h-full pt-[80px] grid"
-                                        style={{ zIndex: 0, gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
+                                        className="absolute top-0 left-0 w-full h-full grid"
+                                        style={{ paddingTop: `${totalHeaderHeight}px`, zIndex: 0, gridTemplateColumns: `repeat(${totalDays}, ${dayWidth}px)` }}
                                         aria-hidden="true"
                                     >
                                         {Array.from({ length: totalDays }).map((_, i) => {
@@ -1481,14 +1500,14 @@ const LookaheadView: React.FC = () => {
 
                                     {/* Timeline header */}
                                     <div className="sticky top-0 bg-gray-50 z-40 text-xs font-semibold text-gray-600 uppercase border-b border-t border-gray-200">
-                                        <div className="flex border-b border-gray-200" style={{ height: '30px' }}>
+                                        <div className="flex border-b border-gray-200" style={{ height: `${headerHeights.weekRow}px` }}>
                                             {weekHeaders.map((week, i) => (
-                                                <div key={i} className="flex items-center justify-center border-r border-gray-200 flex-shrink-0 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-1" style={{ width: `${week.days * DAY_WIDTH}px` }} title={week.label}>{week.label}</div>
+                                                <div key={i} className="flex items-center justify-center border-r border-gray-200 flex-shrink-0 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-1" style={{ width: `${week.days * dayWidth}px` }} title={week.label}>{week.label}</div>
                                             ))}
                                         </div>
                                         <div
                                             className="grid flex-shrink-0"
-                                            style={{ height: '50px', gridTemplateColumns: `repeat(${totalDays}, ${DAY_WIDTH}px)` }}
+                                            style={{ height: `${headerHeights.dayRow}px`, gridTemplateColumns: `repeat(${totalDays}, ${dayWidth}px)` }}
                                         >
                                             {Array.from({ length: totalDays }).map((_, i) => {
                                                 const date = addDays(projectStartDate, i);
@@ -1505,15 +1524,18 @@ const LookaheadView: React.FC = () => {
                                                             <span className={`text-[10px] mr-0.5 ${isBuffer ? 'text-gray-400' : 'text-gray-400'}`}>{date.toLocaleString('default', { weekday: 'short' })[0]}</span>
                                                             <span className={isBuffer ? 'font-normal text-gray-500' : 'font-normal'}>{date.getDate()}</span>
                                                         </div>
-                                                        <div className="h-7 flex flex-col items-center justify-center">
-                                                            {!isBuffer && (
-                                                                <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
-                                                                    <WeatherIcon icon={forecast.icon} />
-                                                                    <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
-                                                                </div>
-                                                            )}
-                                                            {isBuffer && <div style={{ height: '28px' }} />}
-                                                        </div>
+                                                        {headerHeights.weatherSection > 0 && (
+                                                            <div className="flex flex-col items-center justify-center" style={{ height: `${headerHeights.weatherSection}px` }}>
+                                                                {!isBuffer && (
+                                                                    <div className="flex flex-col items-center" title={`${forecast.temp}°F`}>
+                                                                        <WeatherIcon icon={forecast.icon} />
+                                                                        {headerHeights.weatherSection >= 28 && (
+                                                                            <span className="text-[10px] font-medium text-gray-600">{forecast.temp}°</span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}

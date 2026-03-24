@@ -369,7 +369,7 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({
                                                 : 'bg-white '  + (canEnterDayActual ? 'cursor-pointer' : 'cursor-default')
                                     }`}
                                 style={{
-                                    width: '36px', height: '36px', borderRadius: '4px', boxSizing: 'border-box',
+                                    width: `${dayWidth - 4}px`, height: `${dayWidth - 4}px`, borderRadius: '4px', boxSizing: 'border-box',
                                     border: inBuffer
                                         ? '1px solid rgba(209,213,219,0.4)'
                                         : isSelected

@@ -4,8 +4,8 @@ import AppHeader from './AppHeader';
 import MainContent from './MainContent';
 import ItemDetailsPanel from '../shared/ItemDetailsPanel';
 import CreateViewModal from '../shared/CreateViewModal';
-import Header from '../../mainnav/components/Header';
-import Sidebar from '../../mainnav/components/Sidebar';
+import Header from '../../mainnav/components/nav2/Header';
+import Sidebar from '../../mainnav/components/nav2/Sidebar';
 import ViewControls from './ViewControls';
 
 const AppLayout: React.FC = () => {
@@ -35,12 +35,22 @@ const AppLayout: React.FC = () => {
                 />
             )}
             
-            {/* New Global Navigation Header */}
-            <Header onSelectionChange={(title) => console.log('Navigated to:', title)} />
-            
+            {/* Global Navigation Header */}
+            <Header
+                version="v1"
+                onSelectionChange={(title) => console.log('Navigated to:', title)}
+                onHomeClick={() => {}}
+                onCategoryChange={() => {}}
+                onBookmarksDataChange={() => {}}
+            />
+
             <div className="flex flex-1 overflow-hidden">
-                {/* New Global Sidebar */}
-                <Sidebar />
+                {/* Global Sidebar */}
+                <Sidebar
+                    version="v1"
+                    onSelect={(categoryKey, subcategoryKey) => console.log('Sidebar nav:', categoryKey, subcategoryKey)}
+                    onHomeClick={() => {}}
+                />
 
                 {/* Main Application Area Wrapper */}
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">

@@ -193,15 +193,15 @@ const AppHeader: React.FC = () => {
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm font-semibold text-gray-900">{s.name}</span>
                                                 <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${
-                                                    s.status === ScheduleStatus.Draft 
-                                                        ? 'bg-amber-50 text-amber-700 border-amber-200' 
-                                                        : s.status === ScheduleStatus.InReview
+                                                    s.status === ScheduleStatus.Draft
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                        : (s.status === ScheduleStatus.InReview || (s.status === ScheduleStatus.Active && persona === 'sc'))
                                                         ? 'bg-amber-100 text-amber-800 border-amber-300'
                                                         : s.status === ScheduleStatus.Closed
                                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                                         : 'bg-green-50 text-green-700 border-green-200'
                                                 }`}>
-                                                    {s.status}
+                                                    {s.status === ScheduleStatus.Active && persona === 'sc' ? 'In Review' : s.status}
                                                 </span>
                                             </div>
                                             <span className="text-xs text-gray-500">{getScheduleDateRange(s.tasks)}</span>
@@ -212,15 +212,15 @@ const AppHeader: React.FC = () => {
 
                             <div className="flex items-center gap-2">
                                 <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                                    activeSchedule.status === ScheduleStatus.Draft 
-                                        ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-                                        : activeSchedule.status === ScheduleStatus.InReview
+                                    activeSchedule.status === ScheduleStatus.Draft
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : (activeSchedule.status === ScheduleStatus.InReview || (activeSchedule.status === ScheduleStatus.Active && persona === 'sc'))
                                         ? 'bg-amber-200 text-amber-900 border border-amber-300'
                                         : activeSchedule.status === ScheduleStatus.Closed
                                         ? 'bg-gray-100 text-gray-600 border border-gray-300'
                                         : 'bg-green-100 text-green-700 border border-green-200'
                                 }`}>
-                                    {activeSchedule.status}
+                                    {activeSchedule.status === ScheduleStatus.Active && persona === 'sc' ? 'In Review' : activeSchedule.status}
                                 </span>
                                 {activeSchedule.status === ScheduleStatus.Draft && persona === 'gc' && (
                                     <button 
