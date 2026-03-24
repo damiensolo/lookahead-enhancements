@@ -11,10 +11,10 @@ export const getDefaultTableColumns = (): Column[] => [
 
 export const getDefaultLookaheadColumns = (): Column[] => [
   { id: 'sNo', label: '#', width: '40px', visible: true, minWidth: 20, hideable: false },
-  { id: 'outline', label: 'Outline', width: '72px', visible: true, minWidth: 48 },
   { id: 'name', label: 'Task Name', width: '240px', visible: true, minWidth: 100 },
   { id: 'commitment', label: 'Commitment', width: '120px', visible: true, minWidth: 90 },
   { id: 'actions', label: 'ACTIONS', width: '140px', visible: true, minWidth: 110 },
+  { id: 'costCode', label: 'Cost Code', width: '72px', visible: true, minWidth: 48 },
   { id: 'status', label: 'Status', width: '144px', visible: true, minWidth: 120 },
   { id: 'taskType', label: 'Task Type', width: '120px', visible: false, minWidth: 40 },
   { id: 'progress', label: 'Progress', width: '160px', visible: true, minWidth: 80 },

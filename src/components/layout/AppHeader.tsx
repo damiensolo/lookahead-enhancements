@@ -121,6 +121,8 @@ const AppHeader: React.FC = () => {
         if (activeViewMode === 'table' || activeViewMode === 'board') return 'RFIs';
         if (activeViewMode === 'gantt') return 'Schedule';
         if (activeViewMode === 'lookahead') return 'Lookahead';
+        if (activeViewMode === 'production') return 'Production Report';
+        if (activeViewMode === 'kanban') return activeSchedule?.name ?? 'Kanban';
         return 'Budget';
     };
 
@@ -146,7 +148,8 @@ const AppHeader: React.FC = () => {
 
     const isSpreadsheetView = activeViewMode === 'spreadsheet' || activeViewMode === 'spreadsheetV2';
     const isReadyToLock = isSpreadsheetView && unallocated === 0;
-    const showCreateButton = !isSpreadsheetView && activeViewMode !== 'dashboard';
+    const showCreateButton =
+        !isSpreadsheetView && activeViewMode !== 'dashboard' && activeViewMode !== 'production' && activeViewMode !== 'kanban';
 
     // Status colors based on unallocated amount - used only for the status pill
     const statusClasses = unallocated === 0 

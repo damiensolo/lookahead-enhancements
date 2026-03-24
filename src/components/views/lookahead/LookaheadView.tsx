@@ -18,6 +18,7 @@ import ChatPanel from './components/ChatPanel';
 import { ClashResolutionModal } from './components/ClashResolutionModal';
 import ProgressCell from './components/ProgressCell';
 import ContractorSelect from './components/ContractorSelect';
+import { ReviewProgressBar } from './components/ReviewProgressBar';
 import { compareLookaheadTasks } from './utils/diffUtils';
 import { detectLocationClashes, LocationClash } from './utils/clashUtils';
 import { getTotalPlannedQuantity, getTotalActualQuantity, getQuantityUnit, distributePlannedQuantityUniformly, ensureDailyPlanWithinTotal, ensureProductionQuantity, hasAnyActualQuantity, formatQuantityDisplay, getMaxActualForDay } from './utils/quantityUtils';
@@ -51,13 +52,13 @@ const getRowHeight = (density: DisplayDensity) => {
 };
 
 // Mapping from Generic Column ID to Lookahead specific logic
-type LookaheadColumnType = 'sNo' | 'outline' | 'name' | 'commitment' | 'actions' | 'status' | 'taskType' | 'quantity' | 'progress' | 'planStart' | 'planEnd' | 'contractor' | 'crewAssigned' | 'location' | 'shared';
+type LookaheadColumnType = 'sNo' | 'costCode' | 'name' | 'commitment' | 'actions' | 'status' | 'taskType' | 'quantity' | 'progress' | 'planStart' | 'planEnd' | 'contractor' | 'crewAssigned' | 'location' | 'shared';
 
-const STICKY_COLUMN_TYPES: LookaheadColumnType[] = ['sNo', 'outline', 'name'];
+const STICKY_COLUMN_TYPES: LookaheadColumnType[] = ['sNo', 'name'];
 
 const COLUMN_MAPPING: Record<string, LookaheadColumnType> = {
     sNo: 'sNo',
-    outline: 'outline',
+    costCode: 'costCode',
     name: 'name',
     commitment: 'commitment',
     actions: 'actions',
@@ -128,7 +129,7 @@ const commitmentMeta = (status: TaskCommitmentStatus | undefined) => {
         case 'rejected':
             return { label: 'Rejected', classes: 'bg-red-50 text-red-700 border-red-200' };
         case 'adjustment_proposed':
-            return { label: 'Adjustment proposed', classes: 'bg-amber-50 text-amber-800 border-amber-200' };
+            return { label: 'New Proposal', classes: 'bg-amber-50 text-amber-800 border-amber-200' };
         case 'gc_accepted':
             return { label: 'GC accepted', classes: 'bg-teal-50 text-teal-700 border-teal-200' };
         case 'gc_revised':
@@ -219,6 +220,17 @@ const LookaheadView: React.FC = () => {
         if (persona !== 'sc' || !scCompany) return plannerTasks;
         return filterTasksByContractor(plannerTasks, scCompany);
     }, [persona, scCompany, plannerTasks]);
+
+    const commitmentCounts = useMemo(() => {
+        if (activeSchedule?.status !== ScheduleStatus.InReview) return null;
+        const leafTasks = flattenTasks(tasksForDisplay).filter(t => !t.children?.length);
+        const counts: Partial<Record<TaskCommitmentStatus, number>> = {};
+        for (const t of leafTasks) {
+            const s = t.commitmentStatus ?? 'pending';
+            counts[s] = (counts[s] ?? 0) + 1;
+        }
+        return { counts, total: leafTasks.length };
+    }, [activeSchedule?.status, tasksForDisplay]);
 
     const [selectedRowIds, setSelectedRowIds] = useState<Set<string | number>>(new Set());
     const [selectedTask, setSelectedTask] = useState<LookaheadTask | null>(null);
@@ -849,9 +861,9 @@ const LookaheadView: React.FC = () => {
                         isCritical={task.isCriticalPath}
                     />
                 );
-            case 'outline':
+            case 'costCode':
                 return (
-                    <span className="text-xs font-medium text-gray-700 truncate block" title={task.outline}>{task.outline}</span>
+                    <span className="text-xs font-medium text-gray-700 truncate block" title={task.taskCode}>{task.taskCode}</span>
                 );
             case 'name': {
                 const hasBlockingConstraints = task.constraints.some(c => c.severity === 'Blocking');
@@ -1211,13 +1223,13 @@ const LookaheadView: React.FC = () => {
                         return (
                         <div
                             key={col.id}
-                            className={`flex-shrink-0 flex items-center px-2 text-sm relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'actions' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'} ${snoBgClass} ${col.isSticky ? `sticky z-20 ${snoStickyBgClass}` : ''}`}
+                            className={`flex-shrink-0 flex items-center px-2 text-sm relative border-b border-r border-gray-200 ${(col.lookaheadType === 'sNo' || col.lookaheadType === 'actions' || col.lookaheadType === 'commitment') ? 'justify-center' : ''} ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'costCode' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'} ${snoBgClass} ${col.isSticky ? `sticky z-20 ${snoStickyBgClass}` : ''}`}
                             style={{ width: `${col.widthPx}px`, ...(col.isSticky ? { left: col.stickyLeftOffset ?? col.leftOffset } : {}) }}
                         >
                             {(col.lookaheadType === 'sNo' && task.isCriticalPath) && (
                                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600" />
                             )}
-                            <div className={`w-full h-full min-w-0 flex items-center ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'outline' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'}`}>
+                            <div className={`w-full h-full min-w-0 flex items-center ${(col.lookaheadType === 'progress' || col.lookaheadType === 'sNo' || col.lookaheadType === 'status' || col.lookaheadType === 'actions' || col.lookaheadType === 'costCode' || col.lookaheadType === 'commitment') ? '' : 'overflow-hidden'}`}>
                                 {renderCell(col.lookaheadType, task, level, rowIndex)}
                             </div>
                         </div>
@@ -1299,22 +1311,25 @@ const LookaheadView: React.FC = () => {
     return (
         <div className="flex h-full flex-col p-4 gap-4">
             {activeSchedule.status === ScheduleStatus.InReview && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                            <div className="text-xs font-bold uppercase tracking-wider text-amber-900">In Review</div>
-                            <div className="text-sm text-amber-900/90">
+                            <div className="text-xs font-bold uppercase tracking-wider text-gray-500">In Review</div>
+                            <div className="text-sm text-gray-600">
                                 {persona === 'gc'
                                     ? 'Subcontractors are reviewing assigned tasks. Resolve all tasks before publishing to Active.'
                                     : 'This lookahead is awaiting your response. Please commit, propose adjustments, or reject all assigned tasks.'}
                             </div>
                         </div>
                         {persona === 'gc' && (
-                            <div className="text-xs text-amber-900/80">
+                            <div className="text-xs text-gray-400">
                                 Recent activity: {(activityFeedByScheduleId[activeSchedule.id] ?? []).length}
                             </div>
                         )}
                     </div>
+                    {persona === 'gc' && commitmentCounts && (
+                        <ReviewProgressBar counts={commitmentCounts.counts} total={commitmentCounts.total} />
+                    )}
                 </div>
             )}
 
@@ -1584,6 +1599,7 @@ const LookaheadView: React.FC = () => {
                                                 onGcAcceptAdjustment={(taskId, payload) => gcAcceptAdjustment(activeSchedule.id, taskId, payload)}
                                                 onGcCounterPropose={(taskId, payload) => gcCounterPropose(activeSchedule.id, taskId, payload)}
                                                 onGcMarkDisputed={(taskId, payload) => gcMarkDisputed(activeSchedule.id, taskId, payload)}
+                                                onOpenGcReviewModal={selectedTask ? () => setTaskForGcReviewModal(selectedTask) : undefined}
                                             />
                                         ) : (
                                             /* Empty state: panel open but nothing selected */

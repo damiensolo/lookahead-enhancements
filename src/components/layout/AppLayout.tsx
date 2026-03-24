@@ -6,9 +6,14 @@ import ItemDetailsPanel from '../shared/ItemDetailsPanel';
 import CreateViewModal from '../shared/CreateViewModal';
 import Header from '../../mainnav/components/Header';
 import Sidebar from '../../mainnav/components/Sidebar';
+import ViewControls from './ViewControls';
 
 const AppLayout: React.FC = () => {
-    const { modalState, setModalState, handleSaveView, detailedTask, setDetailedTaskId, handlePriorityChange } = useProject();
+    const {
+        modalState, setModalState, handleSaveView,
+        detailedTask, setDetailedTaskId, handlePriorityChange,
+        activeViewMode,
+    } = useProject();
     const mainContentRef = useRef<HTMLDivElement>(null);
     const [isScrolled, setIsScrolled] = useState(false);
     
@@ -41,7 +46,14 @@ const AppLayout: React.FC = () => {
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
                     {/* Existing App Header (View Controls) */}
                     <AppHeader />
-                    
+
+                    {/* View switcher + search — production and kanban (full-width views without LookaheadView toolbar) */}
+                    {(activeViewMode === 'production' || activeViewMode === 'kanban') && (
+                        <div className="flex-shrink-0 flex items-center border-b border-gray-200 bg-white px-4 py-2">
+                            <ViewControls />
+                        </div>
+                    )}
+
                     {/* Existing Content Area */}
                     <div className="flex flex-1 overflow-hidden relative">
                         <main ref={mainContentRef} className="flex-1 overflow-auto transition-all duration-300 ease-in-out">

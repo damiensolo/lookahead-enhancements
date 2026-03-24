@@ -464,13 +464,13 @@ const DraggableTaskBar: React.FC<DraggableTaskBarProps> = ({
                                                     : cellStatusType === 'below' ? '#B91C1C'
                                                     : '#374151',
                                             }}>
-                                                {actualVal}
+                                                {Math.round(actualVal)}
                                             </span>
                                         ) : null;
                                     }
                                     return planVal > 0 ? (
                                         <span className="relative z-10 text-[11px] leading-none select-none text-gray-700" style={{ fontWeight: 600 }}>
-                                            {planVal}
+                                            {Math.round(planVal)}
                                         </span>
                                     ) : null;
                                 })()}

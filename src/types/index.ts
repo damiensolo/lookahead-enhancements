@@ -83,7 +83,7 @@ export interface FilterRule {
     value?: string | string[];
 }
 
-export type ViewMode = 'lookahead';
+export type ViewMode = 'lookahead' | 'production' | 'kanban';
 
 export interface View {
   id: string;

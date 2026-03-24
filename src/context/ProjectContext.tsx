@@ -222,18 +222,121 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   const submitScheduleForReview = useCallback((id: string) => {
+    const reviewAt = new Date().toISOString();
+
+    // Demo states applied positionally to the first N contractor-assigned leaf tasks,
+    // so every commitment state is visible regardless of which tasks are in the lookahead.
+    type DemoState = { commitmentStatus: TaskCommitmentStatus; adjustmentProposal?: TaskAdjustmentProposal };
+    const DEMO_STATES: DemoState[] = [
+      // 1. Committed — sub confirmed as planned
+      {
+        commitmentStatus: 'committed',
+        adjustmentProposal: {
+          history: [{ at: reviewAt, actor: 'sub', status: 'committed', summary: 'Sub committed as planned' }],
+        },
+      },
+      // 2. Adjustment proposed — sub wants to shift dates
+      {
+        commitmentStatus: 'adjustment_proposed',
+        adjustmentProposal: {
+          proposedStartDate: '2026-02-17',
+          proposedEndDate: '2026-03-07',
+          proposedCrewSize: 4,
+          subNotes: 'Predecessor work still in progress — need a 1-week delay to start safely.',
+          history: [{ at: reviewAt, actor: 'sub', status: 'adjustment_proposed', summary: 'Sub proposed adjustment due to predecessor delay' }],
+        },
+      },
+      // 3. Rejected — sub cannot proceed
+      {
+        commitmentStatus: 'rejected',
+        adjustmentProposal: {
+          rejectionReason: 'Unanswered RFI',
+          subNotes: 'Cannot proceed without approved conduit routing drawings (RFI #014 pending approval).',
+          history: [{ at: reviewAt, actor: 'sub', status: 'rejected', summary: 'Sub rejected: unanswered RFI blocking work' }],
+        },
+      },
+      // 4. GC accepted — sub proposed crew reduction, GC accepted
+      {
+        commitmentStatus: 'gc_accepted',
+        adjustmentProposal: {
+          proposedCrewSize: 3,
+          subNotes: 'We can cover this with a 3-person crew given the floor access constraints.',
+          gcResponseNotes: 'Accepted — 3-person crew is fine for this scope.',
+          history: [
+            { at: reviewAt, actor: 'sub', status: 'adjustment_proposed', summary: 'Sub proposed reduced crew size' },
+            { at: reviewAt, actor: 'gc', status: 'gc_accepted', summary: 'GC accepted crew adjustment' },
+          ],
+        },
+      },
+      // 5. GC revised — sub rejected, GC counter-proposed
+      {
+        commitmentStatus: 'gc_revised',
+        adjustmentProposal: {
+          proposedStartDate: '2026-02-18',
+          proposedEndDate: '2026-02-25',
+          proposedCrewSize: 4,
+          rejectionReason: 'Crew not available',
+          subNotes: 'Our crew is committed to another project through Feb 17.',
+          gcResponseNotes: 'Can we start Feb 18 with a 4-person crew? Let us know if that works.',
+          history: [
+            { at: reviewAt, actor: 'sub', status: 'rejected', summary: 'Sub rejected: crew not available on planned dates' },
+            { at: reviewAt, actor: 'gc', status: 'gc_revised', summary: 'GC counter-proposed Feb 18 start with 4-person crew' },
+          ],
+        },
+      },
+      // 6. Disputed — unresolved back-and-forth
+      {
+        commitmentStatus: 'disputed',
+        adjustmentProposal: {
+          proposedStartDate: '2026-03-17',
+          proposedEndDate: '2026-03-27',
+          rejectionReason: 'Material delivery delay',
+          subNotes: 'Devices are on back-order until Mar 16 at the earliest.',
+          gcResponseNotes: 'Schedule shows material on site Mar 10 — flagging for PM review.',
+          history: [
+            { at: reviewAt, actor: 'sub', status: 'adjustment_proposed', summary: 'Sub proposed 1-week delay due to material back-order' },
+            { at: reviewAt, actor: 'gc', status: 'disputed', summary: 'GC marked disputed — delivery dates conflict with sub claim' },
+          ],
+        },
+      },
+      // 7+ tasks remain pending (handled by default below)
+    ];
+
     setSchedules(prev => prev.map(s => {
       if (s.id !== id) return s;
       if (s.status !== ScheduleStatus.Draft) return s;
       const all = flattenTasks(s.tasks);
       const hasAnyAssigned = all.some(t => (t.contractor ?? '').trim().length > 0);
       if (!hasAnyAssigned) return s;
-      const tasks = s.tasks.map(t => ({
-        ...t,
-        commitmentStatus: (t.contractor ?? '').trim().length === 0 ? 'committed' : (t.commitmentStatus ?? 'pending'),
-        adjustmentProposal: t.adjustmentProposal ? t.adjustmentProposal : undefined,
-      }));
-      return { ...s, status: ScheduleStatus.InReview, tasks };
+
+      // Collect leaf task IDs with a contractor in document order, then assign demo states positionally
+      const leafIds: (string | number)[] = [];
+      const collectLeaves = (tasks: LookaheadTask[]) => {
+        tasks.forEach(t => {
+          if (t.children?.length) collectLeaves(t.children);
+          else if ((t.contractor ?? '').trim().length > 0) leafIds.push(t.id);
+        });
+      };
+      collectLeaves(s.tasks);
+      const demoByTaskId = new Map<string | number, DemoState>();
+      leafIds.forEach((tid, i) => {
+        if (i < DEMO_STATES.length) demoByTaskId.set(tid, DEMO_STATES[i]);
+      });
+
+      const applyStates = (tasks: LookaheadTask[]): LookaheadTask[] =>
+        tasks.map(t => {
+          const hasContractor = (t.contractor ?? '').trim().length > 0;
+          const base: LookaheadTask = {
+            ...t,
+            commitmentStatus: hasContractor ? (t.commitmentStatus ?? 'pending') : 'committed',
+            adjustmentProposal: t.adjustmentProposal ?? undefined,
+          };
+          const demo = demoByTaskId.get(t.id);
+          const withDemo = demo ? { ...base, ...demo } : base;
+          return withDemo.children?.length ? { ...withDemo, children: applyStates(withDemo.children) } : withDemo;
+        });
+
+      return { ...s, status: ScheduleStatus.InReview, tasks: applyStates(s.tasks) };
     }));
     pushActivity({
       scheduleId: id,
@@ -610,12 +713,16 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   
   const handleViewModeChange = (mode: ViewMode) => {
       setActiveViewMode(mode);
-      setActiveViewId(null);
-      setTransientView({ 
-          id: `transient-${Date.now()}`, 
-          name: 'Default View', 
-          ...getDefaultViewConfig(mode) 
-      });
+      // Keep the active lookahead view selected so the tab stays highlighted
+      // and the user can click it to navigate back from production mode.
+      if (mode !== 'production') {
+          setActiveViewId(null);
+          setTransientView({
+              id: `transient-${Date.now()}`,
+              name: 'Default View',
+              ...getDefaultViewConfig(mode),
+          });
+      }
       setDetailedTaskId(null);
   };
 

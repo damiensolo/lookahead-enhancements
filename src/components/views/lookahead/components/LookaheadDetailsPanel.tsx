@@ -48,6 +48,8 @@ interface LookaheadDetailsPanelProps {
   onGcAcceptAdjustment?: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
   onGcCounterPropose?: (taskId: string | number, payload: Partial<Omit<TaskAdjustmentProposal, 'history'>>) => void;
   onGcMarkDisputed?: (taskId: string | number, payload?: { gcResponseNotes?: string }) => void;
+  /** Open the GC review modal for this task */
+  onOpenGcReviewModal?: () => void;
 }
 
 const getStatusDot = (status: ConstraintStatus) => {
@@ -143,13 +145,9 @@ const AddConstraintForm: React.FC<{ onAdd: (constraint: Constraint) => void, onC
 };
 
 
-const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, taskDelta, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor, onUpdatePlannedQuantity, onUpdateDailyQuantity, onOpenAddCrew, isDraft = true, isReadOnly = false, embedded = false, commitment, isNetNew, isTopLevelTask = true, onSetCommitment, persona, addProjectRisk, onOpenCommitmentModal, scheduleStatus, onGcAcceptAdjustment, onGcCounterPropose, onGcMarkDisputed }) => {
+const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, taskDelta, onClose, onAddConstraint, onUpdateProgress, onUpdateContractor, onUpdatePlannedQuantity, onUpdateDailyQuantity, onOpenAddCrew, isDraft = true, isReadOnly = false, embedded = false, commitment, isNetNew, isTopLevelTask = true, onSetCommitment, persona, addProjectRisk, onOpenCommitmentModal, scheduleStatus, onGcAcceptAdjustment, onGcCounterPropose, onGcMarkDisputed, onOpenGcReviewModal }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [plannedInputValue, setPlannedInputValue] = useState('');
-  const [gcNotes, setGcNotes] = useState('');
-  const [counterStart, setCounterStart] = useState('');
-  const [counterEnd, setCounterEnd] = useState('');
-  const [counterCrew, setCounterCrew] = useState<string>('');
 
   useEffect(() => {
     if (task) setIsAdding(false);
@@ -164,17 +162,6 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
     }
   }, [task?.id]);
 
-  useEffect(() => {
-    if (!task) return;
-    setGcNotes(task.adjustmentProposal?.gcResponseNotes ?? '');
-    setCounterStart(task.adjustmentProposal?.proposedStartDate ?? task.startDate);
-    setCounterEnd(task.adjustmentProposal?.proposedEndDate ?? task.finishDate);
-    setCounterCrew(
-      task.adjustmentProposal?.proposedCrewSize != null
-        ? String(task.adjustmentProposal.proposedCrewSize)
-        : String(task.crewAssigned ?? '')
-    );
-  }, [task?.id]);
   
   const { canEditPlannedQty, showActualQtySection, canEditActualQty } = getLookaheadPermissions(scheduleStatus ?? '');
 
@@ -200,11 +187,7 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <div className="text-xs text-gray-500">Outline</div>
-                        <div className="font-semibold text-gray-800 text-sm">{task.outline}</div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-500">Task Code</div>
+                        <div className="text-xs text-gray-500">Cost Code</div>
                         <div className="font-semibold text-gray-800 text-sm">{task.taskCode}</div>
                     </div>
                     <div>
@@ -507,128 +490,106 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
               </div>
             )}
 
-            {/* In Review thread (GC) */}
+            {/* Review (GC) — compact summary matching SC commitment pattern */}
             {persona === 'gc' && scheduleStatus === ScheduleStatus.InReview && task && isTopLevelTask && (
               <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Review thread</h3>
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-amber-900">Task status</div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-amber-200 bg-white text-amber-900">
-                      {(task.commitmentStatus ?? 'pending').replace(/_/g, ' ')}
-                    </span>
-                  </div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Review</h3>
+                <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {(() => {
+                    const status = task.commitmentStatus ?? 'pending';
+                    const proposal = task.adjustmentProposal;
 
-                  {(task.adjustmentProposal?.rejectionReason || task.adjustmentProposal?.subNotes) && (
-                    <div className="text-xs text-amber-900/90 space-y-1">
-                      {task.adjustmentProposal?.rejectionReason && (
-                        <div><span className="font-semibold">Rejection reason:</span> {task.adjustmentProposal.rejectionReason}</div>
-                      )}
-                      {task.adjustmentProposal?.subNotes && (
-                        <div><span className="font-semibold">Sub notes:</span> {task.adjustmentProposal.subNotes}</div>
-                      )}
-                    </div>
-                  )}
+                    if (status === 'pending') {
+                      return <p className="text-sm text-gray-500">Awaiting subcontractor response.</p>;
+                    }
 
-                  {(task.adjustmentProposal?.proposedStartDate || task.adjustmentProposal?.proposedEndDate || task.adjustmentProposal?.proposedCrewSize != null) && (
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <div className="text-amber-900/70 font-semibold">Proposed start</div>
-                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedStartDate ?? '—'}</div>
-                      </div>
-                      <div>
-                        <div className="text-amber-900/70 font-semibold">Proposed end</div>
-                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedEndDate ?? '—'}</div>
-                      </div>
-                      <div>
-                        <div className="text-amber-900/70 font-semibold">Proposed crew</div>
-                        <div className="font-medium text-amber-950">{task.adjustmentProposal?.proposedCrewSize ?? '—'}</div>
-                      </div>
-                      <div>
-                        <div className="text-amber-900/70 font-semibold">Materials</div>
-                        <div className="font-medium text-amber-950 truncate" title={task.adjustmentProposal?.proposedMaterialNotes ?? ''}>{task.adjustmentProposal?.proposedMaterialNotes ?? '—'}</div>
-                      </div>
-                    </div>
-                  )}
+                    if (status === 'committed') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-green-700 font-medium">Committed as planned.</p>
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View →</button>
+                          )}
+                        </div>
+                      );
+                    }
 
-                  <div>
-                    <div className="text-xs font-semibold text-amber-900/80 mb-1">GC response notes</div>
-                    <input
-                      type="text"
-                      value={gcNotes}
-                      onChange={(e) => setGcNotes(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-amber-200 rounded-md bg-white"
-                      placeholder="Add a note to the subcontractor (optional)"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={!onGcAcceptAdjustment || task.commitmentStatus !== 'adjustment_proposed'}
-                      onClick={() => onGcAcceptAdjustment?.(task.id, { gcResponseNotes: gcNotes || undefined })}
-                      className="px-3 py-2 text-xs font-bold rounded-md bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Accept adjustment
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!onGcMarkDisputed}
-                      onClick={() => onGcMarkDisputed?.(task.id, { gcResponseNotes: gcNotes || undefined })}
-                      className="px-3 py-2 text-xs font-bold rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Mark disputed
-                    </button>
-                  </div>
-
-                  <div className="rounded-md border border-amber-200 bg-white p-3">
-                    <div className="text-xs font-semibold text-amber-900/80 mb-2">Counter-proposal</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-xs text-amber-900">
-                        Start
-                        <input type="date" value={counterStart} onChange={(e) => setCounterStart(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                      </label>
-                      <label className="text-xs text-amber-900">
-                        End
-                        <input type="date" value={counterEnd} onChange={(e) => setCounterEnd(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                      </label>
-                      <label className="text-xs text-amber-900 col-span-2">
-                        Crew size
-                        <input type="number" value={counterCrew} onChange={(e) => setCounterCrew(e.target.value)} className="mt-1 w-full px-2 py-1.5 text-xs border border-amber-200 rounded bg-white" />
-                      </label>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!onGcCounterPropose}
-                      onClick={() => onGcCounterPropose?.(task.id, {
-                        proposedStartDate: counterStart || undefined,
-                        proposedEndDate: counterEnd || undefined,
-                        proposedCrewSize: counterCrew ? parseInt(counterCrew || '0', 10) : undefined,
-                        gcResponseNotes: gcNotes || undefined,
-                      })}
-                      className="mt-2 w-full px-3 py-2 text-xs font-bold rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Send counter-proposal
-                    </button>
-                  </div>
-
-                  {task.adjustmentProposal?.history?.length ? (
-                    <div className="pt-2 border-t border-amber-200/60">
-                      <div className="text-xs font-semibold text-amber-900/80 mb-2">History</div>
-                      <div className="space-y-2">
-                        {task.adjustmentProposal.history.slice().reverse().map((h, idx) => (
-                          <div key={idx} className="text-xs text-amber-950 flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <span className="font-bold uppercase text-[10px]">{h.actor}</span>
-                              <span className="ml-2 font-semibold">{h.status.replace(/_/g, ' ')}</span>
-                              {h.summary && <span className="ml-2 text-amber-900/80">{h.summary}</span>}
-                            </div>
-                            <div className="text-[10px] text-amber-900/70 flex-shrink-0">{new Date(h.at).toLocaleString()}</div>
+                    if (status === 'adjustment_proposed') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm text-amber-700 font-medium">Adjustment proposed</p>
+                            {(proposal?.proposedStartDate || proposal?.proposedEndDate) && (
+                              <p className="text-xs text-amber-600 mt-0.5">
+                                {proposal?.proposedStartDate} – {proposal?.proposedEndDate}
+                                {proposal?.proposedCrewSize != null ? `, crew: ${proposal.proposedCrewSize}` : ''}
+                              </p>
+                            )}
+                            {proposal?.subNotes && (
+                              <p className="text-xs text-gray-500 mt-0.5 italic truncate" title={proposal.subNotes}>"{proposal.subNotes}"</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-full flex-shrink-0">Respond →</button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (status === 'rejected') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm text-red-700 font-medium">Rejected</p>
+                            {proposal?.rejectionReason && (
+                              <p className="text-xs text-red-600 mt-0.5 truncate" title={proposal.rejectionReason}>{proposal.rejectionReason}</p>
+                            )}
+                            {proposal?.subNotes && (
+                              <p className="text-xs text-gray-500 mt-0.5 italic truncate" title={proposal.subNotes}>"{proposal.subNotes}"</p>
+                            )}
+                          </div>
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-full flex-shrink-0">Respond →</button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (status === 'gc_accepted') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-teal-700 font-medium">Adjustment accepted.</p>
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View →</button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (status === 'gc_revised') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-purple-700 font-medium">Counter-proposal sent.</p>
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View →</button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (status === 'disputed') {
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-orange-700 font-medium">Marked as disputed.</p>
+                          {onOpenGcReviewModal && (
+                            <button type="button" onClick={onOpenGcReviewModal} className="text-xs text-blue-600 hover:underline flex-shrink-0">View →</button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
               </div>
             )}
