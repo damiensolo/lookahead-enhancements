@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { DEMO_PROJECT, DEMO_LOOKAHEAD_WINDOW, DEMO_SUBS, DemoRole } from '../data/lookahead-demo-data';
 import { useDemoStore } from '../store/demo-store';
 import { GCView } from './GCView';
@@ -34,10 +34,6 @@ const DemoLayout: React.FC = () => {
     const [splitSub, setSplitSub] = useState<'apex-electrical' | 'blueline-mechanical'>('apex-electrical');
     const [isTourActive, setIsTourActive] = useState(false);
 
-    const mainRoleView = useMemo(() => {
-        if (activeRole === 'gc') return <GCView />;
-        return <SubView subId={activeRole} />;
-    }, [activeRole]);
 
     const roleStyle = ROLE_STYLES[activeRole];
 
@@ -138,7 +134,7 @@ const DemoLayout: React.FC = () => {
                 <div className="flex-1 flex gap-4">
                     {layoutMode === 'single' ? (
                         <div key={activeRole} className="w-full max-w-5xl mx-auto animate-[fade_120ms_ease-out]">
-                            {mainRoleView}
+                            {activeRole === 'gc' ? <GCView /> : <SubView key={activeRole} subId={activeRole} />}
                             <style>{`
                                 @keyframes fade { from { opacity: 0.6; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
                             `}</style>
@@ -176,7 +172,7 @@ const DemoLayout: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                                <SubView subId={splitSub} />
+                                <SubView key={splitSub} subId={splitSub} />
                             </div>
                         </>
                     )}

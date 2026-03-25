@@ -27,7 +27,8 @@
       "Bash(grep -rn \"slate-\\\\|from ''''.*demo\\\\|DemoStore\\\\|useDemoStore\" src/components/)",
       "Bash(find C:UsersdamieProjectslookahead-enhancementssrc -name *ScheduleStatusMenu* -o -name *schedule*menu*)",
       "Bash(ls:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(grep -E '\"\"zustand\"\"' package.json)"
     ]
   }
 }
