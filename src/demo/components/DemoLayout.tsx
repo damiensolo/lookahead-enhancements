@@ -35,7 +35,10 @@ const DemoLayout: React.FC = () => {
     const [isTourActive, setIsTourActive] = useState(false);
 
 
-    const roleStyle = ROLE_STYLES[activeRole];
+    const isSplit = layoutMode === 'split';
+    // In split mode, badge reflects whichever sub is active in the right panel
+    const badgeRole = isSplit ? splitSub : activeRole;
+    const roleStyle = ROLE_STYLES[badgeRole];
 
     return (
         <div className="flex flex-col min-h-screen bg-slate-950 text-slate-50 pb-20">
@@ -55,45 +58,74 @@ const DemoLayout: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {/* Role switcher */}
-                    <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
-                        <button
-                            type="button"
-                            id="demo-role-gc"
-                            onClick={() => setActiveRole('gc')}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                                activeRole === 'gc'
-                                    ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30'
-                                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                            }`}
-                        >
-                            GC
-                        </button>
-                        <button
-                            type="button"
-                            id="demo-role-apex"
-                            onClick={() => setActiveRole('apex-electrical')}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                                activeRole === 'apex-electrical'
-                                    ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30'
-                                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                            }`}
-                        >
-                            Apex
-                        </button>
-                        <button
-                            type="button"
-                            id="demo-role-blueline"
-                            onClick={() => setActiveRole('blueline-mechanical')}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                                activeRole === 'blueline-mechanical'
-                                    ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
-                                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                            }`}
-                        >
-                            BlueLine
-                        </button>
-                    </div>
+                    {/* Role switcher — adapts to layout mode */}
+                    {isSplit ? (
+                        /* Split mode: GC is always left panel, toggle only the sub panel */
+                        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+                            <button
+                                type="button"
+                                onClick={() => setSplitSub('apex-electrical')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                    splitSub === 'apex-electrical'
+                                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30'
+                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                }`}
+                            >
+                                Apex
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSplitSub('blueline-mechanical')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                    splitSub === 'blueline-mechanical'
+                                        ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
+                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                }`}
+                            >
+                                BlueLine
+                            </button>
+                        </div>
+                    ) : (
+                        /* Single mode: full GC / Apex / BlueLine switcher */
+                        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+                            <button
+                                type="button"
+                                id="demo-role-gc"
+                                onClick={() => setActiveRole('gc')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                    activeRole === 'gc'
+                                        ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30'
+                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                }`}
+                            >
+                                GC
+                            </button>
+                            <button
+                                type="button"
+                                id="demo-role-apex"
+                                onClick={() => setActiveRole('apex-electrical')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                    activeRole === 'apex-electrical'
+                                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30'
+                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                }`}
+                            >
+                                Apex
+                            </button>
+                            <button
+                                type="button"
+                                id="demo-role-blueline"
+                                onClick={() => setActiveRole('blueline-mechanical')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                    activeRole === 'blueline-mechanical'
+                                        ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
+                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                }`}
+                            >
+                                BlueLine
+                            </button>
+                        </div>
+                    )}
 
                     {/* Active role badge */}
                     <div className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold ${roleStyle.badgeClass}`}>
@@ -145,33 +177,6 @@ const DemoLayout: React.FC = () => {
                                 <GCView />
                             </div>
                             <div className="w-1/2 min-w-0">
-                                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3 mb-3 flex items-center justify-between gap-3">
-                                    <div className="text-xs font-semibold text-slate-200">Sub panel</div>
-                                    <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 p-0.5">
-                                        <button
-                                            type="button"
-                                            onClick={() => setSplitSub('apex-electrical')}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                                                splitSub === 'apex-electrical'
-                                                    ? 'bg-amber-500/20 text-amber-200'
-                                                    : 'text-slate-400 hover:text-slate-200'
-                                            }`}
-                                        >
-                                            Apex
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSplitSub('blueline-mechanical')}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                                                splitSub === 'blueline-mechanical'
-                                                    ? 'bg-teal-500/20 text-teal-200'
-                                                    : 'text-slate-400 hover:text-slate-200'
-                                            }`}
-                                        >
-                                            BlueLine
-                                        </button>
-                                    </div>
-                                </div>
                                 <SubView key={splitSub} subId={splitSub} />
                             </div>
                         </>

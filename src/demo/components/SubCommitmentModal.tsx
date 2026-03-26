@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { parse, format } from 'date-fns';
 import { AdjustmentProposal, DemoTask } from '../data/lookahead-demo-data';
 import { SC_REJECTION_REASONS, SC_REJECTION_REASON_OTHER } from '../../components/views/lookahead/constants';
+
+// "Apr 7" → "2025-04-07" for <input type="date">
+const shortDateToISO = (s: string): string => {
+    if (!s) return '';
+    try { return format(parse(s, 'MMM d', new Date(2025, 0, 1)), 'yyyy-MM-dd'); } catch { return ''; }
+};
+
+// "2025-04-07" → "Apr 7" for display
+const isoToShortDate = (s: string): string => {
+    if (!s) return '';
+    try { return format(parse(s, 'yyyy-MM-dd', new Date()), 'MMM d'); } catch { return s; }
+};
 
 type Tab = 'commit' | 'propose' | 'reject';
 
@@ -49,8 +62,8 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
       setTab('commit');
       setEquipVerified(false);
       setCommitNotes('');
-      setProposeStart(task.proposedStart ?? '');
-      setProposeEnd(task.proposedEnd ?? '');
+      setProposeStart(shortDateToISO(task.proposedStart) ?? '');
+      setProposeEnd(shortDateToISO(task.proposedEnd) ?? '');
       setProposeCrew(task.crewSize ?? 0);
       setProposeReason('');
       setProposeComment('');
@@ -80,8 +93,8 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
 
   const handlePropose = () => {
     onPropose({
-      proposedStartDate: proposeStart || undefined,
-      proposedEndDate: proposeEnd || undefined,
+      proposedStartDate: isoToShortDate(proposeStart) || undefined,
+      proposedEndDate: isoToShortDate(proposeEnd) || undefined,
       proposedCrewSize: proposeCrew || undefined,
       subNotes:
         proposeComment ||
@@ -220,23 +233,26 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
                 </div>
               </div>
 
+              <style>{`
+                .demo-date-input::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.6); cursor: pointer; }
+              `}</style>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-slate-400">New start</label>
                   <input
+                    type="date"
                     value={proposeStart}
                     onChange={(e) => setProposeStart(e.target.value)}
-                    placeholder={task.proposedStart}
-                    className={`mt-1 ${inputCls} focus:ring-amber-500/40`}
+                    className={`demo-date-input mt-1 ${inputCls} focus:ring-amber-500/40`}
                   />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400">New end</label>
                   <input
+                    type="date"
                     value={proposeEnd}
                     onChange={(e) => setProposeEnd(e.target.value)}
-                    placeholder={task.proposedEnd}
-                    className={`mt-1 ${inputCls} focus:ring-amber-500/40`}
+                    className={`demo-date-input mt-1 ${inputCls} focus:ring-amber-500/40`}
                   />
                 </div>
               </div>

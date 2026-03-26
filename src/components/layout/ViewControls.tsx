@@ -54,7 +54,7 @@ const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch, renderR
             </>
         )}
 
-        {/* View mode switcher — Lookahead | Production */}
+        {/* View mode switcher — Lookahead | Kanban | Analytics */}
         <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 shadow-sm">
             <button
                 onClick={() => handleViewModeChange('lookahead')}
@@ -66,15 +66,6 @@ const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch, renderR
                 Lookahead
             </button>
             <button
-                onClick={() => handleViewModeChange('production')}
-                className={`ml-1 pl-2 pr-3 py-1.5 text-sm font-medium text-gray-800 rounded-md flex items-center gap-1.5 transition-all duration-150 ${
-                    activeViewMode === 'production' ? 'bg-white shadow-sm border border-gray-200' : 'hover:bg-gray-200'
-                }`}
-            >
-                <DashboardIcon className="w-4 h-4 text-gray-500" />
-                Production
-            </button>
-            <button
                 onClick={() => handleViewModeChange('kanban')}
                 className={`ml-1 pl-2 pr-3 py-1.5 text-sm font-medium text-gray-800 rounded-md flex items-center gap-1.5 transition-all duration-150 ${
                     activeViewMode === 'kanban' ? 'bg-white shadow-sm border border-gray-200' : 'hover:bg-gray-200'
@@ -82,6 +73,15 @@ const ViewControls: React.FC<ViewControlsProps> = ({ renderBeforeSearch, renderR
             >
                 <BoardIcon className="w-4 h-4 text-gray-500" />
                 Kanban
+            </button>
+            <button
+                onClick={() => handleViewModeChange('production')}
+                className={`ml-1 pl-2 pr-3 py-1.5 text-sm font-medium text-gray-800 rounded-md flex items-center gap-1.5 transition-all duration-150 ${
+                    activeViewMode === 'production' ? 'bg-white shadow-sm border border-gray-200' : 'hover:bg-gray-200'
+                }`}
+            >
+                <DashboardIcon className="w-4 h-4 text-gray-500" />
+                Analytics
             </button>
         </div>
     </div>
