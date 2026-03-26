@@ -77,6 +77,7 @@ interface ProjectContextType {
   publishSchedule: (id: string) => void;
   forcePublishSchedule: (id: string) => void;
   createDraft: (strategy?: 'previous' | 'master', config?: { startDate: string; durationDays: number }) => void;
+  deleteDraftSchedule: (id: string) => void;
   updateScheduleTasks: (id: string, tasks: LookaheadTask[]) => void;
   deltas: Record<string, TaskDelta[]>;
   isCreateLookaheadModalOpen: boolean;
@@ -423,6 +424,17 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     setSchedules(prev => [...prev, newDraft]);
     setActiveScheduleId(newDraft.id);
   }, [schedules]);
+
+  const deleteDraftSchedule = useCallback((id: string) => {
+    setSchedules(prev => {
+      const target = prev.find(s => s.id === id);
+      if (!target || target.status !== ScheduleStatus.Draft) return prev;
+      const next = prev.filter(s => s.id !== id);
+      // If we deleted the active schedule, switch to the most recent remaining one
+      setActiveScheduleId(activeScheduleId === id ? (next[next.length - 1]?.id ?? null) : activeScheduleId);
+      return next;
+    });
+  }, [activeScheduleId]);
 
   const publishSchedule = useCallback((id: string) => {
     setSchedules(prev => {
@@ -857,6 +869,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     submitScheduleForReview,
     pullBackScheduleToDraft,
     createDraft,
+    deleteDraftSchedule,
     updateScheduleTasks,
     deltas,
     isCreateLookaheadModalOpen,

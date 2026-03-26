@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { usePersona } from '../../context/PersonaContext';
-import { PlusIcon, CalculatorIcon, HistoryIcon, CalendarIcon, ChevronDownIcon } from '../common/Icons';
+import { PlusIcon, CalculatorIcon, HistoryIcon, CalendarIcon, ChevronDownIcon, TrashIcon } from '../common/Icons';
 import { ScheduleStatus, LookaheadTask } from '../views/lookahead/types';
 import { parseLookaheadDate } from '../../lib/dateUtils';
 import { compareLookaheadTasks } from '../views/lookahead/utils/diffUtils';
@@ -12,9 +12,9 @@ const formatValue = (val: number) =>
     Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const AppHeader: React.FC = () => {
-    const { 
+    const {
         activeViewMode, activeView, setIsCreateLookaheadModalOpen, setIsAddTaskModalOpen,
-        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, forcePublishSchedule, submitScheduleForReview, pullBackScheduleToDraft, deltas, projectRisks
+        schedules, activeScheduleId, setActiveScheduleId, publishSchedule, forcePublishSchedule, submitScheduleForReview, pullBackScheduleToDraft, deleteDraftSchedule, deltas, projectRisks
     } = useProject();
     const { persona, scCompany } = usePersona();
     const [showRisks, setShowRisks] = useState(false);
@@ -24,6 +24,7 @@ const AppHeader: React.FC = () => {
 
     const [showPullBackDialog, setShowPullBackDialog] = useState(false);
     const [showPublishWarningDialog, setShowPublishWarningDialog] = useState(false);
+    const [showDeleteDraftDialog, setShowDeleteDraftDialog] = useState(false);
     const [unresolvedTasksList, setUnresolvedTasksList] = useState<string[]>([]);
 
     const activeSchedule = useMemo(() => 
@@ -113,6 +114,12 @@ const AppHeader: React.FC = () => {
         if (!activeScheduleId) return;
         pullBackScheduleToDraft(activeScheduleId);
         setShowPullBackDialog(false);
+    };
+
+    const confirmDeleteDraft = () => {
+        if (!activeScheduleId) return;
+        deleteDraftSchedule(activeScheduleId);
+        setShowDeleteDraftDialog(false);
     };
     
     // Dynamic title based on view mode
@@ -223,12 +230,22 @@ const AppHeader: React.FC = () => {
                                     {activeSchedule.status === ScheduleStatus.Active && persona === 'sc' ? 'In Review' : activeSchedule.status}
                                 </span>
                                 {activeSchedule.status === ScheduleStatus.Draft && persona === 'gc' && (
-                                    <button 
-                                        onClick={handleSubmitForReview}
-                                        className="px-4 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-md hover:bg-amber-700 shadow-sm transition-all"
-                                    >
-                                        Submit for Review
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setShowDeleteDraftDialog(true)}
+                                            className="px-2 py-1.5 text-xs font-bold rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-all flex items-center gap-1.5"
+                                            title="Delete draft"
+                                        >
+                                            <TrashIcon className="w-3.5 h-3.5" />
+                                            Delete Draft
+                                        </button>
+                                        <button
+                                            onClick={handleSubmitForReview}
+                                            className="px-4 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-md hover:bg-amber-700 shadow-sm transition-all"
+                                        >
+                                            Submit for Review
+                                        </button>
+                                    </>
                                 )}
                                 {activeSchedule.status === ScheduleStatus.InReview && persona === 'gc' && (
                                     <>
@@ -372,6 +389,15 @@ const AppHeader: React.FC = () => {
                 message="Subcontractors will be notified and their responses will be preserved as history. Are you sure you want to proceed?"
                 confirmText="Yes, Pull Back"
                 cancelText="No, Keep in Review"
+            />
+            <ConfirmationDialog
+                isOpen={showDeleteDraftDialog}
+                onClose={() => setShowDeleteDraftDialog(false)}
+                onConfirm={confirmDeleteDraft}
+                title="Delete Draft Lookahead?"
+                message={`"${activeSchedule?.name}" will be permanently deleted. This cannot be undone.`}
+                confirmText="Delete Draft"
+                cancelText="Cancel"
             />
             <ConfirmationDialog
                 isOpen={showPublishWarningDialog}
