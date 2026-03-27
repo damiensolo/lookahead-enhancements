@@ -959,7 +959,12 @@ const LookaheadView: React.FC = () => {
                             <span className="ml-1.5 px-1 rounded bg-blue-100 text-blue-600 text-[8px] font-bold uppercase tracking-wider" title="Field Breakdown Task">Field</span>
                         )}
                         {task.isCriticalPath && (
-                            <span className="ml-1.5 px-1 rounded bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-wider" title="Critical Path Task">CP</span>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="ml-1.5 px-1 rounded bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-wider">CT</span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">Critical Task</TooltipContent>
+                            </Tooltip>
                         )}
                         {hasBlockingConstraints && (
                             <Tooltip>

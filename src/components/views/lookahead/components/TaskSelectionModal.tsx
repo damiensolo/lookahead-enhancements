@@ -155,8 +155,8 @@ export const TaskSelectionModal: React.FC<TaskSelectionModalProps> = ({
           {/* Legend / Critical Info */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
             <div className="flex items-center gap-2 group cursor-help">
-              <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wider border border-red-200">CP</span>
-              <span className="text-[11px] font-medium text-zinc-500">Critical Path</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wider border border-red-200">CT</span>
+              <span className="text-[11px] font-medium text-zinc-500">Critical Task</span>
               <div className="hidden group-hover:block absolute bg-zinc-900 text-white text-[10px] p-2 rounded shadow-xl z-[60] max-w-[200px] mt-12">
                 Tasks that must finish on time for the project to finish on time.
               </div>

@@ -92,10 +92,10 @@ export const EnhancedTaskSelectionRow: React.FC<EnhancedTaskSelectionRowProps> =
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Critical Path Badge */}
+          {/* Critical Task Badge */}
           {task.isCriticalPath && (
             <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider">
-              CP
+              CT
             </span>
           )}
 

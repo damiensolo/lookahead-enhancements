@@ -405,7 +405,7 @@ const LookaheadDetailsPanel: React.FC<LookaheadDetailsPanelProps> = ({ task, tas
                     {task.isCriticalPath && (
                       <div className="flex items-center gap-2 p-2 rounded-md bg-red-100 text-red-700 border border-red-200">
                         <AlertTriangleIcon className="w-5 h-5" />
-                        <span className="font-semibold text-sm">Critical Path Task</span>
+                        <span className="font-semibold text-sm">Critical Task</span>
                       </div>
                     )}
 
