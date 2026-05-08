@@ -6,7 +6,7 @@ export const RoleSwitcher: React.FC<{
   onChangeRole: (role: DemoRole) => void;
 }> = ({ activeRole, onChangeRole }) => {
   return (
-    <div className="inline-flex items-center gap-1 rounded-md bg-gray-800 p-0.5 shadow-lg">
+    <div className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white p-0.5 shadow-sm">
       <RoleTab
         id="demo-role-gc"
         label="General Contractor View"
@@ -40,7 +40,7 @@ const RoleTab: React.FC<{ id?: string; label: string; active: boolean; onClick: 
     id={id}
     onClick={onClick}
     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-      active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+      active ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent'
     }`}
   >
     {label}

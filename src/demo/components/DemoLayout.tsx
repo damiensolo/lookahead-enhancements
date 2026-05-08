@@ -11,18 +11,18 @@ type LayoutMode = 'single' | 'split';
 const ROLE_STYLES = {
     gc: {
         label: 'General Contractor',
-        badgeClass: 'border-blue-500/40 bg-blue-500/15 text-blue-200',
-        dot: 'bg-blue-400',
+        badgeClass: 'border-blue-200 bg-blue-50 text-blue-700',
+        dot: 'bg-blue-500',
     },
     'apex-electrical': {
         label: 'Apex Electrical',
-        badgeClass: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
-        dot: 'bg-amber-400',
+        badgeClass: 'border-amber-200 bg-amber-50 text-amber-700',
+        dot: 'bg-amber-500',
     },
     'blueline-mechanical': {
         label: 'BlueLine Mechanical',
-        badgeClass: 'border-teal-500/40 bg-teal-500/15 text-teal-200',
-        dot: 'bg-teal-400',
+        badgeClass: 'border-teal-200 bg-teal-50 text-teal-700',
+        dot: 'bg-teal-500',
     },
 } as const;
 
@@ -41,17 +41,17 @@ const DemoLayout: React.FC = () => {
     const roleStyle = ROLE_STYLES[badgeRole];
 
     return (
-        <div className="flex flex-col min-h-screen bg-slate-950 text-slate-50 pb-20">
-            <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm px-6 py-3 flex items-center justify-between gap-4">
+        <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 pb-20">
+            <header className="border-b border-gray-200 bg-white px-6 py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                    <span className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-200 flex-shrink-0">
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 flex-shrink-0">
                         Demo
                     </span>
                     <div className="min-w-0">
-                        <h1 className="text-sm font-semibold text-slate-50 truncate">
+                        <h1 className="text-sm font-semibold text-gray-900 truncate">
                             Lookahead Review — Live Demo
                         </h1>
-                        <p className="text-xs text-slate-400 truncate">
+                        <p className="text-xs text-gray-500 truncate">
                             {DEMO_PROJECT.shortName} · {DEMO_LOOKAHEAD_WINDOW.label}
                         </p>
                     </div>
@@ -61,14 +61,14 @@ const DemoLayout: React.FC = () => {
                     {/* Role switcher — adapts to layout mode */}
                     {isSplit ? (
                         /* Split mode: GC is always left panel, toggle only the sub panel */
-                        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+                        <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5 gap-0.5">
                             <button
                                 type="button"
                                 onClick={() => setSplitSub('apex-electrical')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                     splitSub === 'apex-electrical'
-                                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30'
-                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        : 'text-gray-500 hover:text-gray-700 border border-transparent'
                                 }`}
                             >
                                 Apex
@@ -78,8 +78,8 @@ const DemoLayout: React.FC = () => {
                                 onClick={() => setSplitSub('blueline-mechanical')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                     splitSub === 'blueline-mechanical'
-                                        ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
-                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                        ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                        : 'text-gray-500 hover:text-gray-700 border border-transparent'
                                 }`}
                             >
                                 BlueLine
@@ -87,15 +87,15 @@ const DemoLayout: React.FC = () => {
                         </div>
                     ) : (
                         /* Single mode: full GC / Apex / BlueLine switcher */
-                        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+                        <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5 gap-0.5">
                             <button
                                 type="button"
                                 id="demo-role-gc"
                                 onClick={() => setActiveRole('gc')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                     activeRole === 'gc'
-                                        ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30'
-                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        : 'text-gray-500 hover:text-gray-700 border border-transparent'
                                 }`}
                             >
                                 GC
@@ -106,8 +106,8 @@ const DemoLayout: React.FC = () => {
                                 onClick={() => setActiveRole('apex-electrical')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                     activeRole === 'apex-electrical'
-                                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30'
-                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        : 'text-gray-500 hover:text-gray-700 border border-transparent'
                                 }`}
                             >
                                 Apex
@@ -118,8 +118,8 @@ const DemoLayout: React.FC = () => {
                                 onClick={() => setActiveRole('blueline-mechanical')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                     activeRole === 'blueline-mechanical'
-                                        ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
-                                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                                        ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                        : 'text-gray-500 hover:text-gray-700 border border-transparent'
                                 }`}
                             >
                                 BlueLine
@@ -136,7 +136,7 @@ const DemoLayout: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setLayoutMode(layoutMode === 'single' ? 'split' : 'single')}
-                        className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-800 transition-colors"
+                        className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         aria-label="Toggle layout mode"
                     >
                         {layoutMode === 'single' ? 'Split' : 'Single'}
@@ -146,8 +146,8 @@ const DemoLayout: React.FC = () => {
                         onClick={() => setIsTourActive((v) => !v)}
                         className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                             isTourActive
-                                ? 'border-amber-400/60 bg-amber-500/10 text-amber-200'
-                                : 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                         }`}
                         aria-label="Toggle guided tour"
                     >
@@ -155,7 +155,7 @@ const DemoLayout: React.FC = () => {
                     </button>
                     <a
                         href="/"
-                        className="text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                        className="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
                     >
                         Exit demo
                     </a>

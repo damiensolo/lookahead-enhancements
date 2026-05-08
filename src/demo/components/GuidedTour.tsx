@@ -237,41 +237,41 @@ export const GuidedTour: React.FC<{
       <div className="fixed inset-0 z-[240] bg-black/30" onClick={onClose} />
 
       <div
-        className="fixed z-[260] w-[340px] rounded-xl border border-slate-800 bg-slate-950 shadow-2xl"
+        className="fixed z-[260] w-[340px] rounded-xl border border-gray-200 bg-white shadow-2xl"
         style={{ top, left }}
         role="dialog"
         aria-label="Guided tour"
       >
-        <div className="px-4 py-3 border-b border-slate-800 flex items-start justify-between gap-3">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold text-slate-200">{step.title}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
+            <div className="text-xs font-semibold text-gray-700">{step.title}</div>
+            <div className="text-[11px] text-gray-400 mt-0.5">
               Step {idx + 1} of {STEPS.length}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-sm px-2 py-1 rounded"
+            className="text-gray-400 hover:text-gray-700 text-sm px-2 py-1 rounded"
             aria-label="Close tour"
           >
             ✕
           </button>
         </div>
-        <div className="px-4 py-3 text-xs text-slate-300 leading-relaxed">
+        <div className="px-4 py-3 text-xs text-gray-600 leading-relaxed">
           {step.body}
           {step.id === 'step-3' && (
-            <div className="mt-2 text-[11px] text-slate-400">
+            <div className="mt-2 text-[11px] text-gray-500">
               Tip: Apex has {apexElectricalTasksCount} tasks assigned.
             </div>
           )}
         </div>
-        <div className="px-4 py-3 border-t border-slate-800 flex items-center justify-between gap-2">
+        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setIdx((i) => Math.max(0, i - 1))}
             disabled={idx === 0}
-            className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-900 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
+            className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors"
           >
             Back
           </button>

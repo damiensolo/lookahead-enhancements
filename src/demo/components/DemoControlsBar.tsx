@@ -146,25 +146,25 @@ export const DemoControlsBar: React.FC<{
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-[220] border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
+      <div className="fixed bottom-0 left-0 right-0 z-[220] border-t border-gray-200 bg-white">
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] text-slate-400">
-              State: <span className="text-slate-200 font-semibold">{lookaheadStatus}</span>
+            <div className="text-[11px] text-gray-500">
+              State: <span className="text-gray-700 font-semibold">{lookaheadStatus}</span>
               {isAutoRunning && autoRunStep && (
-                <span className="ml-2 inline-flex items-center gap-1 text-emerald-300">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="ml-2 inline-flex items-center gap-1 text-emerald-700">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {autoRunStep}
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-300 truncate">{summary || `${tasks.length} tasks`}</div>
+            <div className="text-xs text-gray-600 truncate">{summary || `${tasks.length} tasks`}</div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               type="button"
               onClick={onToggleLayout}
-              className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200 transition-colors"
+              className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors"
             >
               {layoutMode === 'single' ? 'Split screen' : 'Single view'}
             </button>
@@ -172,7 +172,7 @@ export const DemoControlsBar: React.FC<{
               type="button"
               onClick={onToggleTour}
               className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors ${
-                isTourActive ? 'border-amber-400/60 bg-amber-500/10 text-amber-200' : 'border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200'
+                isTourActive ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-gray-300 bg-white hover:bg-gray-50 text-gray-700'
               }`}
             >
               Guide Me
@@ -189,7 +189,7 @@ export const DemoControlsBar: React.FC<{
               type="button"
               disabled={isAutoRunning}
               onClick={() => setConfirmReset(true)}
-              className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
+              className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors"
             >
               Reset Demo
             </button>
@@ -200,7 +200,7 @@ export const DemoControlsBar: React.FC<{
                   abortRef.current = true;
                   setIsAutoRunning(false);
                 }}
-                className="px-3 py-2 rounded-md text-xs font-bold border border-rose-500/40 text-rose-200 hover:bg-rose-500/10 transition-colors"
+                className="px-3 py-2 rounded-md text-xs font-bold border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
               >
                 Stop
               </button>
@@ -210,30 +210,30 @@ export const DemoControlsBar: React.FC<{
       </div>
 
       {confirmReset && (
-        <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-950 text-slate-50 shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-800 flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white text-gray-900 shadow-2xl">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm font-semibold">Reset demo?</div>
-                <div className="text-xs text-slate-400 mt-0.5">Reset everything to the beginning?</div>
+                <div className="text-xs text-gray-500 mt-0.5">Reset everything to the beginning?</div>
               </div>
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="text-slate-400 hover:text-white text-sm px-2 py-1 rounded"
+                className="text-gray-400 hover:text-gray-700 text-sm px-2 py-1 rounded"
                 aria-label="Close"
               >
                 ✕
               </button>
             </div>
-            <div className="px-5 py-4 text-xs text-slate-300">
+            <div className="px-5 py-4 text-xs text-gray-600">
               This will restore the lookahead to <span className="font-semibold">draft</span> and set all tasks back to <span className="font-semibold">pending</span>.
             </div>
-            <div className="px-5 py-4 border-t border-slate-800 flex items-center justify-end gap-2">
+            <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-900 text-slate-200 transition-colors"
+                className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors"
               >
                 Cancel
               </button>

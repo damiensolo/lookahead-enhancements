@@ -12,19 +12,19 @@ import { SubCommitmentModal } from './SubCommitmentModal';
 
 const SUB_COLORS = {
   'apex-electrical': {
-    headerBorder: 'border-amber-500/20',
-    headerBg: 'bg-amber-500/5',
-    pillBorder: 'border-amber-500/30',
-    pillBg: 'bg-amber-500/15',
-    pillText: 'text-amber-200',
+    headerBorder: 'border-amber-200',
+    headerBg: 'bg-amber-50',
+    pillBorder: 'border-amber-200',
+    pillBg: 'bg-amber-100',
+    pillText: 'text-amber-700',
     label: 'SUB',
   },
   'blueline-mechanical': {
-    headerBorder: 'border-teal-500/20',
-    headerBg: 'bg-teal-500/5',
-    pillBorder: 'border-teal-500/30',
-    pillBg: 'bg-teal-500/15',
-    pillText: 'text-teal-200',
+    headerBorder: 'border-teal-200',
+    headerBg: 'bg-teal-50',
+    pillBorder: 'border-teal-200',
+    pillBg: 'bg-teal-100',
+    pillText: 'text-teal-700',
     label: 'SUB',
   },
 } as const;
@@ -50,21 +50,21 @@ export const SubView: React.FC<{ subId: 'apex-electrical' | 'blueline-mechanical
               <span className={`inline-flex items-center rounded-md border ${colors.pillBorder} ${colors.pillBg} px-2 py-0.5 text-[11px] font-bold ${colors.pillText} uppercase tracking-wide`}>
                 {colors.label}
               </span>
-              <span className="text-sm font-semibold text-slate-50">{DEMO_SUBS[subId].name}</span>
+              <span className="text-sm font-semibold text-gray-900">{DEMO_SUBS[subId].name}</span>
             </div>
-            <div className="text-xs text-slate-400 mt-0.5">{DEMO_PROJECT.shortName}</div>
-            <div className="text-xs text-slate-500">{DEMO_LOOKAHEAD_WINDOW.label}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{DEMO_PROJECT.shortName}</div>
+            <div className="text-xs text-gray-400">{DEMO_LOOKAHEAD_WINDOW.label}</div>
           </div>
           <div className="text-right">
-            <div className="text-[11px] text-slate-500">My progress</div>
-            <div className="text-xs font-semibold text-slate-200">
+            <div className="text-[11px] text-gray-400">My progress</div>
+            <div className="text-xs font-semibold text-gray-700">
               {responded} of {tasks.length} responded
             </div>
           </div>
         </div>
 
         {lookaheadStatus === 'in_review' && (
-          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-xs text-amber-800">
             {DEMO_PROJECT.gcName} has submitted a lookahead for your review.
           </div>
         )}
@@ -96,25 +96,25 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, subId }) => {
 
   const border =
     status === 'committed' || status === 'gc_accepted'
-      ? 'border-emerald-500/30'
+      ? 'border-emerald-200'
       : status === 'rejected'
-      ? 'border-rose-500/30'
+      ? 'border-rose-200'
       : status === 'adjustment_proposed' || status === 'gc_revised'
-      ? 'border-amber-500/30'
-      : 'border-slate-800';
+      ? 'border-amber-200'
+      : 'border-gray-200';
 
   return (
     <>
-      <div className={`rounded-xl border ${border} bg-slate-900/40 overflow-hidden`}>
-        <div className="px-4 py-3 border-b border-slate-800">
+      <div className={`rounded-xl border ${border} bg-white overflow-hidden`}>
+        <div className="px-4 py-3 border-b border-gray-200">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-100 truncate">{task.name}</div>
+              <div className="text-sm font-semibold text-gray-900 truncate">{task.name}</div>
               <div className="mt-1 flex flex-wrap gap-2">
-                <span className="inline-flex items-center rounded-full bg-slate-950/40 border border-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+                <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">
                   {task.proposedStart} – {task.proposedEnd}
                 </span>
-                <span className="inline-flex items-center rounded-full bg-slate-950/40 border border-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+                <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">
                   {task.location}
                 </span>
               </div>
@@ -122,45 +122,45 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, subId }) => {
             <StatusBadge type="commitment" status={status} />
           </div>
           {reopened && (
-            <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 animate-pulse">
+            <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700 animate-pulse">
               GC has revised — please review.
             </div>
           )}
         </div>
 
-        <div className="px-4 py-3 text-xs text-slate-300 space-y-2">
+        <div className="px-4 py-3 text-xs text-gray-600 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="text-slate-500">Crew</div>
-              <div className="font-semibold text-slate-200">{task.crewSize}</div>
+              <div className="text-gray-400">Crew</div>
+              <div className="font-semibold text-gray-700">{task.crewSize}</div>
             </div>
             <div>
-              <div className="text-slate-500">Materials</div>
+              <div className="text-gray-400">Materials</div>
               <div className="truncate" title={task.materials}>{task.materials}</div>
             </div>
           </div>
 
           {(status === 'adjustment_proposed' || status === 'gc_revised') && task.adjustmentProposal && (
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-              <div className="text-[11px] font-semibold text-amber-200">Proposed changes</div>
-              <div className="mt-1 text-slate-200">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <div className="text-[11px] font-semibold text-amber-700">Proposed changes</div>
+              <div className="mt-1 text-gray-700">
                 {task.adjustmentProposal.proposedStartDate || '—'} – {task.adjustmentProposal.proposedEndDate || '—'}
                 {typeof task.adjustmentProposal.proposedCrewSize === 'number'
                   ? ` · crew ${task.adjustmentProposal.proposedCrewSize}`
                   : ''}
               </div>
               {task.adjustmentProposal.gcResponseNotes && (
-                <div className="mt-1 text-slate-300">GC: {task.adjustmentProposal.gcResponseNotes}</div>
+                <div className="mt-1 text-gray-600">GC: {task.adjustmentProposal.gcResponseNotes}</div>
               )}
-              <div className="mt-1 text-[11px] text-slate-400">Awaiting GC response</div>
+              <div className="mt-1 text-[11px] text-gray-500">Awaiting GC response</div>
             </div>
           )}
 
           {status === 'rejected' && task.adjustmentProposal?.rejectionReason && (
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2">
-              <div className="text-[11px] font-semibold text-rose-200">Rejected</div>
-              <div className="mt-1 text-slate-200">{task.adjustmentProposal.rejectionReason}</div>
-              <div className="mt-1 text-[11px] text-slate-400">Awaiting GC response</div>
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+              <div className="text-[11px] font-semibold text-rose-700">Rejected</div>
+              <div className="mt-1 text-gray-700">{task.adjustmentProposal.rejectionReason}</div>
+              <div className="mt-1 text-[11px] text-gray-500">Awaiting GC response</div>
             </div>
           )}
         </div>
@@ -171,7 +171,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, subId }) => {
             disabled={locked && !reopened}
             onClick={() => setIsModalOpen(true)}
             id={task.id === 'task-3' ? 'demo-sub-task-3-propose' : task.id === 'task-6' ? 'demo-sub-task-6-reject' : undefined}
-            className="w-full px-3 py-2 rounded-md text-xs font-bold border border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-full px-3 py-2 rounded-md text-xs font-bold border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {locked && !reopened
               ? (status === 'committed' ? 'Committed' : 'Accepted')

@@ -8,7 +8,7 @@ import { compareLookaheadTasks } from '../views/lookahead/utils/diffUtils';
 import { DeltasModal } from '../views/lookahead/components/DeltasModal';
 import { ConfirmationDialog } from '../common/ConfirmationDialog';
 
-const formatValue = (val: number) => 
+const formatValue = (val: number) =>
     Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const AppHeader: React.FC = () => {

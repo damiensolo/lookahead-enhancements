@@ -28,7 +28,11 @@
       "Bash(find C:UsersdamieProjectslookahead-enhancementssrc -name *ScheduleStatusMenu* -o -name *schedule*menu*)",
       "Bash(ls:*)",
       "Bash(npm run:*)",
-      "Bash(grep -E '\"\"zustand\"\"' package.json)"
+      "Bash(grep -E '\"\"zustand\"\"' package.json)",
+      "mcp__plugin_figma_figma__use_figma",
+      "Bash(curl -s -o /tmp/cap.png \"https://www.figma.com/api/mcp/asset/e20bea6d-7879-489f-a201-99ae6040375d\")",
+      "Bash(curl -s -o cap.png \"https://www.figma.com/api/mcp/asset/e20bea6d-7879-489f-a201-99ae6040375d\")",
+      "Bash(dir cap.png)"
     ]
   }
 }

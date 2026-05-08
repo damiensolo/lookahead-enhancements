@@ -6,20 +6,20 @@ type Kind =
   | { type: 'commitment'; status: DemoCommitmentStatus };
 
 const scheduleMeta: Record<DemoLookaheadStatus, { label: string; classes: string }> = {
-  draft: { label: 'Draft', classes: 'bg-slate-700/60 text-slate-200 border-slate-600' },
-  in_review: { label: 'In Review', classes: 'bg-amber-500/20 text-amber-200 border-amber-500/30' },
-  active: { label: 'Active', classes: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30' },
-  closed: { label: 'Closed', classes: 'bg-slate-700/60 text-slate-400 border-slate-600' },
+  draft: { label: 'Draft', classes: 'bg-gray-100 text-gray-700 border-gray-200' },
+  in_review: { label: 'In Review', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+  active: { label: 'Active', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  closed: { label: 'Closed', classes: 'bg-gray-100 text-gray-500 border-gray-200' },
 };
 
 const commitmentMeta: Record<DemoCommitmentStatus, { label: string; classes: string }> = {
-  pending: { label: 'Pending', classes: 'bg-slate-700/60 text-slate-300 border-slate-600' },
-  committed: { label: 'Committed', classes: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30' },
-  rejected: { label: 'Rejected', classes: 'bg-rose-500/20 text-rose-200 border-rose-500/30' },
-  adjustment_proposed: { label: 'Adjustment', classes: 'bg-amber-500/20 text-amber-200 border-amber-500/30' },
-  gc_accepted: { label: 'GC Accepted', classes: 'bg-teal-500/20 text-teal-200 border-teal-500/30' },
-  gc_revised: { label: 'GC Revised', classes: 'bg-violet-500/20 text-violet-200 border-violet-500/30' },
-  disputed: { label: 'Disputed', classes: 'bg-orange-500/20 text-orange-200 border-orange-500/30' },
+  pending: { label: 'Pending', classes: 'bg-gray-100 text-gray-600 border-gray-200' },
+  committed: { label: 'Committed', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  rejected: { label: 'Rejected', classes: 'bg-rose-50 text-rose-700 border-rose-200' },
+  adjustment_proposed: { label: 'Adjustment', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+  gc_accepted: { label: 'GC Accepted', classes: 'bg-teal-50 text-teal-700 border-teal-200' },
+  gc_revised: { label: 'GC Revised', classes: 'bg-violet-50 text-violet-700 border-violet-200' },
+  disputed: { label: 'Disputed', classes: 'bg-orange-50 text-orange-700 border-orange-200' },
 };
 
 export const StatusBadge: React.FC<

@@ -110,23 +110,23 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
   };
 
   const inputCls =
-    'w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 resize-none placeholder:text-slate-500';
-  const selectCls = `${inputCls} bg-slate-900 cursor-pointer`;
+    'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 resize-none placeholder:text-gray-400';
+  const selectCls = `${inputCls} bg-white cursor-pointer`;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 text-slate-50 shadow-2xl flex flex-col max-h-[calc(100vh-3rem)]">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white text-gray-900 shadow-2xl flex flex-col max-h-[calc(100vh-3rem)]">
 
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-start justify-between gap-4 flex-shrink-0">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-50">Review Task</div>
-            <div className="text-xs text-slate-400 mt-0.5 truncate" title={task.name}>{task.name}</div>
+            <div className="text-sm font-semibold text-gray-900">Review Task</div>
+            <div className="text-xs text-gray-500 mt-0.5 truncate" title={task.name}>{task.name}</div>
             <div className="mt-1.5 flex flex-wrap gap-2">
-              <span className="inline-flex items-center rounded-full bg-slate-900 border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300">
+              <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">
                 {task.proposedStart} – {task.proposedEnd}
               </span>
-              <span className="inline-flex items-center rounded-full bg-slate-900 border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300">
+              <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600">
                 {task.location}
               </span>
             </div>
@@ -134,7 +134,7 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-sm px-2 py-1 rounded flex-shrink-0"
+            className="text-gray-400 hover:text-gray-700 text-sm px-2 py-1 rounded flex-shrink-0"
             aria-label="Close"
           >
             ✕
@@ -142,7 +142,7 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
         </div>
 
         {/* Tab bar */}
-        <div className="flex border-b border-slate-800 flex-shrink-0">
+        <div className="flex border-b border-gray-200 flex-shrink-0">
           {TAB_CONFIG.map(({ id, label }) => (
             <button
               key={id}
@@ -150,11 +150,11 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
               className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
                 tab === id
                   ? id === 'commit'
-                    ? 'border-emerald-500 text-emerald-300'
+                    ? 'border-emerald-500 text-emerald-700'
                     : id === 'propose'
-                    ? 'border-amber-500 text-amber-300'
-                    : 'border-rose-500 text-rose-300'
-                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                    ? 'border-amber-500 text-amber-700'
+                    : 'border-rose-500 text-rose-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               {label}
@@ -167,28 +167,28 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
 
           {/* GC notes — always visible */}
           {task.gcNotes && (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">GC Notes</div>
-              <div className="mt-1 text-xs text-slate-200">{task.gcNotes}</div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">GC Notes</div>
+              <div className="mt-1 text-xs text-gray-700">{task.gcNotes}</div>
             </div>
           )}
 
           {/* ── COMMIT TAB ── */}
           {tab === 'commit' && (
             <>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-gray-500">
                 Confirm you can deliver this task as scheduled. Equipment &amp; material availability must be verified before committing.
               </p>
 
-              <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2.5 space-y-1">
-                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Task Details</div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-1">
+                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Task Details</div>
                 <div className="grid grid-cols-2 gap-2 text-xs mt-1">
-                  <div><span className="text-slate-500">Crew size</span><div className="font-semibold text-slate-200 mt-0.5">{task.crewSize}</div></div>
-                  <div><span className="text-slate-500">Location</span><div className="font-semibold text-slate-200 mt-0.5">{task.location}</div></div>
+                  <div><span className="text-gray-400">Crew size</span><div className="font-semibold text-gray-700 mt-0.5">{task.crewSize}</div></div>
+                  <div><span className="text-gray-400">Location</span><div className="font-semibold text-gray-700 mt-0.5">{task.location}</div></div>
                 </div>
                 <div className="text-xs mt-1">
-                  <span className="text-slate-500">Materials</span>
-                  <div className="text-slate-300 mt-0.5">{task.materials}</div>
+                  <span className="text-gray-400">Materials</span>
+                  <div className="text-gray-600 mt-0.5">{task.materials}</div>
                 </div>
               </div>
 
@@ -197,16 +197,16 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
                   type="checkbox"
                   checked={equipVerified}
                   onChange={(e) => setEquipVerified(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/40 flex-shrink-0 cursor-pointer"
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 bg-white text-emerald-600 focus:ring-emerald-500/40 flex-shrink-0 cursor-pointer"
                 />
-                <span className="text-xs text-slate-300 group-hover:text-slate-100 transition-colors">
+                <span className="text-xs text-gray-600 group-hover:text-gray-900 transition-colors">
                   Equipment &amp; material availability verified
                 </span>
               </label>
 
               <div>
-                <label className="text-xs text-slate-400">
-                  Notes <span className="text-slate-600">(optional)</span>
+                <label className="text-xs text-gray-500">
+                  Notes <span className="text-gray-400">(optional)</span>
                 </label>
                 <textarea
                   rows={3}
@@ -222,23 +222,23 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
           {/* ── PROPOSE TAB ── */}
           {tab === 'propose' && (
             <>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-gray-500">
                 Propose revised dates. The GC will review and respond to your submission.
               </p>
 
-              <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-                <div className="text-[11px] font-semibold text-slate-400">Original schedule</div>
-                <div className="text-xs text-slate-200 mt-0.5">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="text-[11px] font-semibold text-gray-500">Original schedule</div>
+                <div className="text-xs text-gray-700 mt-0.5">
                   {task.proposedStart} – {task.proposedEnd} · crew {task.crewSize}
                 </div>
               </div>
 
               <style>{`
-                .demo-date-input::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.6); cursor: pointer; }
+                .demo-date-input::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; }
               `}</style>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400">New start</label>
+                  <label className="text-xs text-gray-500">New start</label>
                   <input
                     type="date"
                     value={proposeStart}
@@ -247,7 +247,7 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400">New end</label>
+                  <label className="text-xs text-gray-500">New end</label>
                   <input
                     type="date"
                     value={proposeEnd}
@@ -258,7 +258,7 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Adjusted crew size</label>
+                <label className="text-xs text-gray-500">Adjusted crew size</label>
                 <input
                   type="number"
                   value={proposeCrew}
@@ -269,7 +269,7 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Reason for adjustment</label>
+                <label className="text-xs text-gray-500">Reason for adjustment</label>
                 <select
                   value={proposeReason}
                   onChange={(e) => setProposeReason(e.target.value)}
@@ -283,11 +283,11 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">
+                <label className="text-xs text-gray-500">
                   Comment{' '}
                   {proposeCommentRequired
-                    ? <span className="text-rose-400">(required)</span>
-                    : <span className="text-slate-600">(optional)</span>}
+                    ? <span className="text-rose-600">(required)</span>
+                    : <span className="text-gray-400">(optional)</span>}
                 </label>
                 <textarea
                   rows={3}
@@ -303,12 +303,12 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
           {/* ── REJECT TAB ── */}
           {tab === 'reject' && (
             <>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-gray-500">
                 Select a rejection reason. The GC will be notified and will need to resolve this task.
               </p>
 
               <div>
-                <label className="text-xs text-slate-400">Rejection reason</label>
+                <label className="text-xs text-gray-500">Rejection reason</label>
                 <select
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
@@ -322,11 +322,11 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">
+                <label className="text-xs text-gray-500">
                   Comment{' '}
                   {rejectCommentRequired
-                    ? <span className="text-rose-400">(required)</span>
-                    : <span className="text-slate-600">(optional)</span>}
+                    ? <span className="text-rose-600">(required)</span>
+                    : <span className="text-gray-400">(optional)</span>}
                 </label>
                 <textarea
                   rows={3}
@@ -341,11 +341,11 @@ export const SubCommitmentModal: React.FC<SubCommitmentModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-end gap-2 flex-shrink-0">
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2 flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-900 text-slate-300 transition-colors"
+            className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors"
           >
             Cancel
           </button>

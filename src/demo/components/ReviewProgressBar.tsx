@@ -11,7 +11,7 @@ export const ReviewProgressBar: React.FC<{
       { key: 'gc_accepted', value: counts.gc_accepted ?? 0, className: 'bg-teal-500', label: 'GC accepted' },
       { key: 'adjustment_proposed', value: counts.adjustment_proposed ?? 0, className: 'bg-amber-500', label: 'Adjustment' },
       { key: 'rejected', value: counts.rejected ?? 0, className: 'bg-rose-500', label: 'Rejected' },
-      { key: 'pending', value: counts.pending ?? 0, className: 'bg-slate-300', label: 'Pending' },
+      { key: 'pending', value: counts.pending ?? 0, className: 'bg-gray-300', label: 'Pending' },
       { key: 'disputed', value: counts.disputed ?? 0, className: 'bg-orange-500', label: 'Disputed' },
     ];
     return items
@@ -22,14 +22,14 @@ export const ReviewProgressBar: React.FC<{
   const resolved = (counts.committed ?? 0) + (counts.gc_accepted ?? 0);
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="text-xs font-semibold text-slate-200">Review progress</div>
-        <div className="text-xs text-slate-400">
+        <div className="text-xs font-semibold text-gray-700">Review progress</div>
+        <div className="text-xs text-gray-500">
           {resolved} of {total} tasks resolved
         </div>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
         <div className="h-2 w-full flex">
           {segments.map((s) => (
             <div
@@ -41,7 +41,7 @@ export const ReviewProgressBar: React.FC<{
           ))}
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
         {segments.map((s) => (
           <div key={s.key} className="inline-flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-sm ${s.className}`} />

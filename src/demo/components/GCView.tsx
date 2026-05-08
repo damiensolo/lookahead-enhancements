@@ -54,14 +54,14 @@ export const GCView: React.FC = () => {
     <div className="flex gap-4 h-full relative">
       {showPublishSuccess && (
         <div className="absolute inset-0 z-[120] pointer-events-none flex items-center justify-center">
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 backdrop-blur-sm px-6 py-5 shadow-2xl animate-[pop_420ms_ease-out]">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-5 shadow-2xl animate-[pop_420ms_ease-out]">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-200 text-xl font-black">
+              <div className="h-10 w-10 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xl font-black">
                 ✓
               </div>
               <div>
-                <div className="text-sm font-semibold text-emerald-100">Published to Active</div>
-                <div className="text-xs text-emerald-200/70">Planning locked · execution begins</div>
+                <div className="text-sm font-semibold text-emerald-800">Published to Active</div>
+                <div className="text-xs text-emerald-700">Planning locked · execution begins</div>
               </div>
             </div>
           </div>
@@ -71,14 +71,14 @@ export const GCView: React.FC = () => {
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 mb-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-md border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[11px] font-bold text-blue-200 uppercase tracking-wide">GC</span>
-                <span className="text-sm font-semibold text-slate-50">{DEMO_PROJECT.shortName}</span>
+                <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wide">GC</span>
+                <span className="text-sm font-semibold text-gray-900">{DEMO_PROJECT.shortName}</span>
               </div>
-              <div className="text-xs text-slate-400 mt-0.5">{DEMO_LOOKAHEAD_WINDOW.label}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{DEMO_LOOKAHEAD_WINDOW.label}</div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <StatusBadge type="schedule" status={lookaheadStatus} size="md" />
@@ -97,7 +97,7 @@ export const GCView: React.FC = () => {
                   <button
                     type="button"
                     onClick={resetDemo}
-                    className="px-3 py-2 rounded-md border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200 text-xs font-bold transition-colors"
+                    className="px-3 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold transition-colors"
                   >
                     Pull Back to Draft
                   </button>
@@ -108,7 +108,7 @@ export const GCView: React.FC = () => {
                     className={`px-4 py-2 rounded-md text-xs font-bold transition-colors ${
                       canPublish
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }`}
                     id="demo-publish-lookahead"
                     title={!canPublish ? `${unresolved.length} task(s) unresolved` : 'Publish lookahead'}
@@ -118,7 +118,7 @@ export const GCView: React.FC = () => {
                 </>
               )}
               {lookaheadStatus === 'active' && (
-                <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-200">
+                <span className="inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700">
                   Lookahead Active
                 </span>
               )}
@@ -132,8 +132,8 @@ export const GCView: React.FC = () => {
           </div>
         )}
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
-          <div className="grid grid-cols-[1.6fr_0.9fr_0.9fr_0.45fr_0.55fr_0.6fr] gap-0 border-b border-slate-800 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="grid grid-cols-[1.6fr_0.9fr_0.9fr_0.45fr_0.55fr_0.6fr] gap-0 border-b border-gray-200 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
             <div>Task</div>
             <div>Assigned to</div>
             <div>Dates</div>
@@ -142,7 +142,7 @@ export const GCView: React.FC = () => {
             <div className="text-right">Actions</div>
           </div>
 
-          <div className="divide-y divide-slate-800">
+          <div className="divide-y divide-gray-200">
             {sorted.map((t) => (
               <GCTaskRow
                 key={t.id}
@@ -157,8 +157,8 @@ export const GCView: React.FC = () => {
         </div>
 
         {lookaheadStatus === 'in_review' && unresolved.length > 0 && (
-          <div className="mt-3 text-xs text-slate-400">
-            <span className="font-semibold text-slate-300">{unresolved.length}</span> unresolved task(s).
+          <div className="mt-3 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700">{unresolved.length}</span> unresolved task(s).
             Resolve all tasks to enable publishing.
           </div>
         )}
@@ -186,25 +186,25 @@ const GCTaskRow: React.FC<{
       task.commitmentStatus === 'disputed');
 
   return (
-    <div className={canExpand ? 'bg-slate-950/20' : ''}>
+    <div className={canExpand ? 'bg-gray-50' : ''}>
       <div
         className={[
           'grid grid-cols-[1.6fr_0.9fr_0.9fr_0.45fr_0.55fr_0.6fr] gap-0 px-4 py-3 items-center',
           isInReview && (task.commitmentStatus === 'rejected' || task.commitmentStatus === 'adjustment_proposed')
-            ? 'bg-amber-500/5'
+            ? 'bg-amber-50/60'
             : '',
-          pulse ? 'ring-1 ring-amber-400/40 animate-pulse' : '',
+          pulse ? 'ring-1 ring-amber-400/60 animate-pulse' : '',
         ].join(' ')}
       >
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-100 truncate">{task.name}</div>
-          <div className="text-xs text-slate-500 truncate">{task.location}</div>
+          <div className="text-sm font-semibold text-gray-900 truncate">{task.name}</div>
+          <div className="text-xs text-gray-400 truncate">{task.location}</div>
         </div>
-        <div className="text-xs text-slate-300">{getSubDisplayName(task.assignedTo)}</div>
-        <div className="text-xs text-slate-300">
+        <div className="text-xs text-gray-600">{getSubDisplayName(task.assignedTo)}</div>
+        <div className="text-xs text-gray-600">
           {task.proposedStart} – {task.proposedEnd}
         </div>
-        <div className="text-xs text-slate-300 text-center">{task.crewSize}</div>
+        <div className="text-xs text-gray-600 text-center">{task.crewSize}</div>
         <div className="text-center">
           <StatusBadge type="commitment" status={task.commitmentStatus} />
         </div>
@@ -213,40 +213,40 @@ const GCTaskRow: React.FC<{
                 <button
                   type="button"
                   onClick={onToggleExpand}
-                  className="text-xs font-semibold text-slate-200 hover:text-white hover:underline"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
                   id={task.id === 'task-3' ? 'demo-gc-task-3-review' : task.id === 'task-6' ? 'demo-gc-task-6-review' : undefined}
                 >
                   {expanded ? 'Hide' : 'Review'}
                 </button>
               ) : (
-                <span className="text-xs text-slate-500">—</span>
+                <span className="text-xs text-gray-400">—</span>
               )}
             </div>
       </div>
       {expanded && canExpand && (
         <div className="px-4 pb-4">
-          <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
-            <div className="text-xs font-semibold text-slate-200 mb-2">Response details</div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="text-xs font-semibold text-gray-700 mb-2">Response details</div>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <div className="text-slate-500">Original</div>
-                <div className="text-slate-200">
+                <div className="text-gray-400">Original</div>
+                <div className="text-gray-700">
                   {task.proposedStart} – {task.proposedEnd} · crew {task.crewSize}
                 </div>
               </div>
               <div>
-                <div className="text-slate-500">Proposed / notes</div>
-                <div className="text-slate-200">
+                <div className="text-gray-400">Proposed / notes</div>
+                <div className="text-gray-700">
                   {task.adjustmentProposal?.proposedStartDate || '—'} – {task.adjustmentProposal?.proposedEndDate || '—'}
                   {typeof task.adjustmentProposal?.proposedCrewSize === 'number'
                     ? ` · crew ${task.adjustmentProposal?.proposedCrewSize}`
                     : ''}
                 </div>
                 {task.adjustmentProposal?.rejectionReason && (
-                  <div className="mt-1 text-rose-200">Rejected: {task.adjustmentProposal.rejectionReason}</div>
+                  <div className="mt-1 text-rose-700">Rejected: {task.adjustmentProposal.rejectionReason}</div>
                 )}
                 {task.adjustmentProposal?.subNotes && (
-                  <div className="mt-1 text-slate-300">{task.adjustmentProposal.subNotes}</div>
+                  <div className="mt-1 text-gray-600">{task.adjustmentProposal.subNotes}</div>
                 )}
               </div>
             </div>
@@ -275,7 +275,7 @@ const GCActionButtons: React.FC<{ taskId: string; status: DemoTask['commitmentSt
         disabled={!canAccept}
         onClick={() => gcAcceptAdjustment(taskId)}
         className={`px-3 py-2 rounded-md text-xs font-bold transition-colors ${
-          canAccept ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+          canAccept ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
         }`}
       >
         Accept
@@ -292,7 +292,7 @@ const GCActionButtons: React.FC<{ taskId: string; status: DemoTask['commitmentSt
           })
         }
         className={`px-3 py-2 rounded-md text-xs font-bold transition-colors ${
-          canCounter ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+          canCounter ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
         }`}
       >
         Counter-propose
@@ -300,7 +300,7 @@ const GCActionButtons: React.FC<{ taskId: string; status: DemoTask['commitmentSt
       <button
         type="button"
         onClick={() => gcMarkDisputed(taskId, 'Flagged for conversation')}
-        className="px-3 py-2 rounded-md text-xs font-bold border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200 transition-colors"
+        className="px-3 py-2 rounded-md text-xs font-bold border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors"
       >
         Dispute
       </button>
