@@ -32,7 +32,20 @@
       "mcp__plugin_figma_figma__use_figma",
       "Bash(curl -s -o /tmp/cap.png \"https://www.figma.com/api/mcp/asset/e20bea6d-7879-489f-a201-99ae6040375d\")",
       "Bash(curl -s -o cap.png \"https://www.figma.com/api/mcp/asset/e20bea6d-7879-489f-a201-99ae6040375d\")",
-      "Bash(dir cap.png)"
+      "Bash(dir cap.png)",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__012da11d-c7f7-4dc7-b6ca-880b7a56c8ec__get_metadata",
+      "mcp__012da11d-c7f7-4dc7-b6ca-880b7a56c8ec__get_screenshot",
+      "mcp__012da11d-c7f7-4dc7-b6ca-880b7a56c8ec__use_figma",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(where chrome *)",
+      "Bash(where msedge *)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --hide-scrollbars --window-size=1440,900 --screenshot=\"C:/Users/damie/Projects/lookahead-enhancements/.claude/worktrees/wizardly-torvalds-2de6ad/.claude/app-screenshot.png\" \"http://localhost:3000/\")",
+      "mcp__012da11d-c7f7-4dc7-b6ca-880b7a56c8ec__upload_assets",
+      "Bash(curl -X POST -F \"file=@.claude/app-screenshot.png;filename=Lookahead App Screen.png\" \"https://mcp.figma.com/mcp/upload/ce7be8a5-81d9-4399-aca9-945305127d30/submit?scaleMode=FILL\")",
+      "Bash(curl -s -o \".claude/figma-result.png\" \"https://www.figma.com/api/mcp/asset/b7b18e81-48e2-4751-8473-4c76fbf8e511\")"
     ]
   }
 }
